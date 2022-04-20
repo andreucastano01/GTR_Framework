@@ -9,6 +9,7 @@
 #include "utils.h"
 #include "scene.h"
 #include "extra/hdre.h"
+#include <algorithm>
 
 
 using namespace GTR;
@@ -33,9 +34,31 @@ void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		if (ent->entity_type == PREFAB)
 		{
 			PrefabEntity* pent = (GTR::PrefabEntity*)ent;
-			if(pent->prefab)
-				renderPrefab(ent->model, pent->prefab, camera);
+			if (pent->prefab) 
+				renderPrefab(ent->model, pent->prefab, camera); //quitar esta linea cuando lo tenga funcionando	
 		}
+	}
+
+	//A partir de aqui ordenamos (este codigo es una mierda)
+	std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
+		return rc1.material->alpha_mode <= rc1.material->alpha_mode;
+	});
+	RenderCall rc;
+	int sizerc = render_calls.size();
+	for (int i = 0; i < sizerc; i++) {
+		rc = render_calls.back();
+		render_calls.pop_back();
+		if (rc.material->alpha_mode == GTR::eAlphaMode::BLEND) break;
+		renderMeshWithMaterial(rc.model, rc.mesh, rc.material, camera);
+	}
+	std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
+		return rc1.distance_to_camera <= rc1.distance_to_camera;
+	});
+	int sizerc2 = render_calls.size();
+	for (int i = 0; i < sizerc2; i++) {
+		rc = render_calls.back();
+		render_calls.pop_back();
+		renderMeshWithMaterial(rc.model, rc.mesh, rc.material, camera);
 	}
 }
 
@@ -66,7 +89,15 @@ void Renderer::renderNode(const Matrix44& prefab_model, GTR::Node* node, Camera*
 		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize) )
 		{
 			//render node mesh
-			renderMeshWithMaterial( node_model, node->mesh, node->material, camera );
+			RenderCall rc;
+			Vector3 nodepos = node_model.getTranslation();
+			rc.mesh = node->mesh;
+			rc.material = node->material;
+			rc.model = node_model;
+			rc.distance_to_camera = nodepos.distance(camera->eye);
+			render_calls.push_back(rc);
+
+			//renderMeshWithMaterial( node_model, node->mesh, node->material, camera);
 			//node->mesh->renderBounding(node_model, true);
 		}
 	}
