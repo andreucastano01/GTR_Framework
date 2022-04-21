@@ -25,7 +25,7 @@ GTR::BaseEntity* selected_entity = nullptr;
 FBO* fbo = nullptr;
 Texture* texture = nullptr;
 
-float cam_speed = 10;
+float cam_speed = 150;
 
 Application::Application(int window_width, int window_height, SDL_Window* window)
 {

@@ -12,8 +12,6 @@ class cJSON;
 //our namespace
 namespace GTR {
 
-
-
 	enum eEntityType {
 		NONE = 0,
 		PREFAB = 1,
@@ -49,6 +47,17 @@ namespace GTR {
 		Prefab* prefab;
 		
 		PrefabEntity();
+		virtual void renderInMenu();
+		virtual void configure(cJSON* json);
+	};
+
+	class LightEntity : public GTR::BaseEntity
+	{
+	public:
+		std::string filename;
+		LightEntity* light;
+
+		LightEntity();
 		virtual void renderInMenu();
 		virtual void configure(cJSON* json);
 	};

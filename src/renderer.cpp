@@ -35,44 +35,20 @@ void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		{
 			PrefabEntity* pent = (GTR::PrefabEntity*)ent;
 			if (pent->prefab) 
-				renderPrefab(ent->model, pent->prefab, camera); //quitar esta linea cuando lo tenga funcionando	
+				renderPrefab(ent->model, pent->prefab, camera);
 		}
-	}
+	}	
 
-	//A partir de aqui ordenamos	
-	//Codigo chapucero para ordenar
-	/*std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
-		return rc1.material->alpha_mode <= rc1.material->alpha_mode;
-	});
-	RenderCall rc;
-	int sizerc = render_calls.size();
-	for (int i = 0; i < sizerc; i++) {
-		rc = render_calls.back();
-		render_calls.pop_back();
-		if (rc.material->alpha_mode == GTR::eAlphaMode::BLEND) break;
-		renderMeshWithMaterial(rc.model, rc.mesh, rc.material, camera);
-	}
+	//Codigo para ordenar los rendercalls
 	std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
-		return rc1.distance_to_camera <= rc2.distance_to_camera;
-	});
-	int sizerc2 = render_calls.size();
-	for (int i = 0; i < sizerc2; i++) {
-		rc = render_calls.back();
-		render_calls.pop_back();
-		renderMeshWithMaterial(rc.model, rc.mesh, rc.material, camera);
-	}*/
-
-	//Codigo no tan chapucero para ordenar
-	RenderCall rc;
-	std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
-		return rc1.distance_to_camera >= rc2.distance_to_camera;
+		if(rc1.material->alpha_mode == GTR::eAlphaMode::BLEND && rc2.material->alpha_mode == GTR::eAlphaMode::BLEND) rc1.distance_to_camera > rc2.distance_to_camera;
+		return rc1.distance_to_camera < rc2.distance_to_camera;
 	});
 	int sizerc = render_calls.size();
 	for (int i = 0; i < sizerc; i++) {
-		rc = render_calls.back();
-		render_calls.pop_back();
-		renderMeshWithMaterial(rc.model, rc.mesh, rc.material, camera);
+		renderMeshWithMaterial(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera); //Va muy mal de rendimiento (sino volver a modo pila)
 	}
+	render_calls.clear();
 }
 
 //renders all the prefab

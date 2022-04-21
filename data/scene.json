@@ -51,9 +51,25 @@
 			"name":"tree",
 			"type":"PREFAB",
 			"filename":"prefabs/tree/scene.gltf",
+			"position":[102,0,-401],
+			"angle":-90,
+			"scale":[0.8,0.8,0.8]
+		},
+		{
+			"name":"tree2",
+			"type":"PREFAB",
+			"filename":"prefabs/tree/scene.gltf",
 			"position":[102,0,401],
 			"angle":-90,
 			"scale":[0.8,0.8,0.8]
+		},
+		{
+			"name":"dog",
+			"type":"PREFAB",
+			"filename":"prefabs/dog/scene.gltf",
+			"position":[-40,104,-401],
+			"angle":-90,
+			"scale":[60,60,60]
 		},
 		{
 			"name":"spot",

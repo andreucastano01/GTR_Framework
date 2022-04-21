@@ -133,7 +133,7 @@ void mainLoop(SDL_Window* window)
 		//render frame
 		app->render();
 		if (app->render_gui)
-			renderDebug(window, app);
+			renderDebug(window, app); //Comentar si peta en modo debug
 		// swap between front buffer and back buffer
 		SDL_GL_SwapWindow(window);
 

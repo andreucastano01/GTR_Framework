@@ -10,7 +10,6 @@ namespace GTR {
 	class Material;
 	
 	class RenderCall {
-
 	public:
 		Mesh* mesh;
 		Material* material;
