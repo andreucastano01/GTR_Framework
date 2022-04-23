@@ -84,7 +84,6 @@ namespace GTR {
 		bool load(const char* filename);
 		BaseEntity* createEntity(std::string type);
 	};
-
 };
 
 #endif

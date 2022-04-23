@@ -93,7 +93,6 @@ namespace GTR {
 	class Prefab
 	{
 	public:
-
 		std::string name;
 		std::map<std::string, Node*> nodes_by_name;
 		std::string url;
@@ -115,5 +114,4 @@ namespace GTR {
 		static Prefab* Get(const char* filename);
 		void registerPrefab(std::string name);
 	};
-
 };

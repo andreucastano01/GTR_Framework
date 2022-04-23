@@ -114,8 +114,32 @@ bool GTR::Scene::load(const char* filename)
 			ent->model.scale(scale.x, scale.y, scale.z);
 		}
 
+		if (cJSON_GetObjectItem(entity_json, "color")) {
+			Vector3 color = readJSONVector3(entity_json, "color", Vector3(1, 1, 1));
+		}
+
 		if (cJSON_GetObjectItem(entity_json, "intensity")) {
-			int intensity = readJSONNumber(json, "intensity", intensity);
+			float intensity = readJSONNumber(entity_json, "intensity", intensity);
+		}
+
+		if (cJSON_GetObjectItem(entity_json, "light_type")) {
+			std::string light_type_str = cJSON_GetObjectItem(entity_json, "light_type")->valuestring;
+		}
+
+		if (cJSON_GetObjectItem(entity_json, "max_dist")) {
+			float max_distance = readJSONNumber(entity_json, "max_dist", max_distance);
+		}
+
+		if (cJSON_GetObjectItem(entity_json, "cone_angle")) {
+			float cone_angle = readJSONNumber(entity_json, "cone_angle", cone_angle);
+		}
+
+		if (cJSON_GetObjectItem(entity_json, "cone_exp")) {
+			float cone_exp = readJSONNumber(entity_json, "cone_exp", cone_exp);
+		}
+
+		if (cJSON_GetObjectItem(entity_json, "area_size")) {
+			float area_size = readJSONNumber(entity_json, "area_size", area_size);
 		}
 		ent->configure(entity_json);
 	}
