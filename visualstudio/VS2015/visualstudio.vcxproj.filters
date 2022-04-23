@@ -117,6 +117,9 @@
     <ClCompile Include="..\..\src\task.cpp">
       <Filter>utils</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\light.cpp">
+      <Filter>pipeline</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\extra\textparser.h">
@@ -230,6 +233,9 @@
     </ClInclude>
     <ClInclude Include="..\..\src\task.h">
       <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\light.h">
+      <Filter>pipeline</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

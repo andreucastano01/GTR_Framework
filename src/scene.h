@@ -23,6 +23,7 @@ namespace GTR {
 
 	class Scene;
 	class Prefab;
+	class Light;
 
 	//represents one element of the scene (could be lights, prefabs, cameras, etc)
 	class BaseEntity
@@ -55,7 +56,7 @@ namespace GTR {
 	{
 	public:
 		std::string filename;
-		LightEntity* light;
+		Light* light;
 
 		LightEntity();
 		virtual void renderInMenu();

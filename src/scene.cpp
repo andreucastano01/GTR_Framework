@@ -2,6 +2,7 @@
 #include "utils.h"
 
 #include "prefab.h"
+#include "light.h"
 #include "extra/cJSON.h"
 
 GTR::Scene* GTR::Scene::instance = NULL;
@@ -9,7 +10,6 @@ GTR::Scene* GTR::Scene::instance = NULL;
 GTR::Scene::Scene()
 {
 	instance = this;
-	
 }
 
 void GTR::Scene::clear()
@@ -114,6 +114,9 @@ bool GTR::Scene::load(const char* filename)
 			ent->model.scale(scale.x, scale.y, scale.z);
 		}
 
+		if (cJSON_GetObjectItem(entity_json, "intensity")) {
+			int intensity = readJSONNumber(json, "intensity", intensity);
+		}
 		ent->configure(entity_json);
 	}
 
@@ -127,6 +130,8 @@ GTR::BaseEntity* GTR::Scene::createEntity(std::string type)
 {
 	if (type == "PREFAB")
 		return new GTR::PrefabEntity();
+	if (type == "LIGHT")
+		return new GTR::LightEntity();
     return NULL;
 }
 
@@ -139,9 +144,6 @@ void GTR::BaseEntity::renderInMenu()
 	ImGuiMatrix44(model, "Model");
 #endif
 }
-
-
-
 
 GTR::PrefabEntity::PrefabEntity()
 {
@@ -172,3 +174,16 @@ void GTR::PrefabEntity::renderInMenu()
 #endif
 }
 
+GTR::LightEntity::LightEntity()
+{
+	entity_type = LIGHT;
+	light = NULL;
+}
+
+void GTR::LightEntity::configure(cJSON* json) {
+
+}
+
+void GTR::LightEntity::renderInMenu() {
+	BaseEntity::renderInMenu();
+}
