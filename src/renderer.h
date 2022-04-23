@@ -27,6 +27,7 @@ namespace GTR {
 
 		//add here your functions
 		std::vector<RenderCall> render_calls;
+		std::vector<LightEntity*> lights;
 
 		//renders several elements of the scene
 		void renderScene(GTR::Scene* scene, Camera* camera);

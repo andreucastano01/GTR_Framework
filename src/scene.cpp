@@ -2,7 +2,6 @@
 #include "utils.h"
 
 #include "prefab.h"
-#include "light.h"
 #include "extra/cJSON.h"
 
 GTR::Scene* GTR::Scene::instance = NULL;
@@ -113,34 +112,6 @@ bool GTR::Scene::load(const char* filename)
 			Vector3 scale = readJSONVector3(entity_json, "scale", Vector3(1, 1, 1));
 			ent->model.scale(scale.x, scale.y, scale.z);
 		}
-
-		if (cJSON_GetObjectItem(entity_json, "color")) {
-			Vector3 color = readJSONVector3(entity_json, "color", Vector3(1, 1, 1));
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "intensity")) {
-			float intensity = readJSONNumber(entity_json, "intensity", intensity);
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "light_type")) {
-			std::string light_type_str = cJSON_GetObjectItem(entity_json, "light_type")->valuestring;
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "max_dist")) {
-			float max_distance = readJSONNumber(entity_json, "max_dist", max_distance);
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "cone_angle")) {
-			float cone_angle = readJSONNumber(entity_json, "cone_angle", cone_angle);
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "cone_exp")) {
-			float cone_exp = readJSONNumber(entity_json, "cone_exp", cone_exp);
-		}
-
-		if (cJSON_GetObjectItem(entity_json, "area_size")) {
-			float area_size = readJSONNumber(entity_json, "area_size", area_size);
-		}
 		ent->configure(entity_json);
 	}
 
@@ -171,7 +142,7 @@ void GTR::BaseEntity::renderInMenu()
 
 GTR::PrefabEntity::PrefabEntity()
 {
-	entity_type = PREFAB;
+	entity_type = eEntityType::PREFAB;
 	prefab = NULL;
 }
 
@@ -200,14 +171,34 @@ void GTR::PrefabEntity::renderInMenu()
 
 GTR::LightEntity::LightEntity()
 {
-	entity_type = LIGHT;
-	light = NULL;
+	entity_type = eEntityType::LIGHT;
+	color.set(1, 1, 1);
+	intensity = 1;
 }
 
 void GTR::LightEntity::configure(cJSON* json) {
-
+	color = readJSONVector3(json, "color", color);
+	intensity = readJSONNumber(json, "intensity", intensity);
+	std::string light_type_str = readJSONString(json, "light_type", "");
+	if (light_type_str == "POINT") light_type = GTR::eLightType::POINT;
+	if (light_type_str == "SPOT") light_type = GTR::eLightType::SPOT;
+	if (light_type_str == "DIRECTIONAL") light_type = GTR::eLightType::DIRECTIONAL;
+	max_distance = readJSONNumber(json, "max_dist", max_distance);
+	cone_angle = readJSONNumber(json, "cone_angle", cone_angle);
+	cone_exp = readJSONNumber(json, "cone_exp", cone_exp);
+	area_size = readJSONNumber(json, "area_size", area_size);
 }
 
 void GTR::LightEntity::renderInMenu() {
 	BaseEntity::renderInMenu();
+	std::string str;
+	switch (light_type){
+		case GTR::eLightType::POINT: str = "POINT"; break;
+		case GTR::eLightType::SPOT: str = "SPOT"; break;
+		case GTR::eLightType::DIRECTIONAL: str = "DIRECTIONAL"; break;
+	default: break;
+	}
+	ImGui::Text("Light type: %s", str.c_str());
+	ImGui::ColorEdit3("Color", color.v);
+	ImGui::DragFloat("Intensity", &intensity);
 }

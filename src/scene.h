@@ -21,9 +21,14 @@ namespace GTR {
 		DECALL = 5
 	};
 
+	enum eLightType {
+		POINT = 0,
+		SPOT = 1,
+		DIRECTIONAL = 2
+	};
+
 	class Scene;
 	class Prefab;
-	class Light;
 
 	//represents one element of the scene (could be lights, prefabs, cameras, etc)
 	class BaseEntity
@@ -55,8 +60,13 @@ namespace GTR {
 	class LightEntity : public GTR::BaseEntity
 	{
 	public:
-		std::string filename;
-		Light* light;
+		Vector3 color;
+		float intensity;
+		eLightType light_type;
+		float max_distance;
+		float cone_angle;
+		float cone_exp;
+		float area_size;
 
 		LightEntity();
 		virtual void renderInMenu();

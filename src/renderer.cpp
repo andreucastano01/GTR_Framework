@@ -23,6 +23,22 @@ void Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	checkGLErrors();
 
+	lights.clear();
+
+	//Charge lights
+	for (int i = 0; i < scene->entities.size(); ++i)
+	{
+		BaseEntity* ent = scene->entities[i];
+		if (!ent->visible)
+			continue;
+
+		//is a light!
+		if (ent->entity_type == LIGHT) {
+			LightEntity* lent = (GTR::LightEntity*)ent;
+			lights.push_back(lent);
+		}
+	}
+
 	//render entities
 	for (int i = 0; i < scene->entities.size(); ++i)
 	{
@@ -108,6 +124,11 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	//define locals to simplify coding
 	Shader* shader = NULL;
 	Texture* texture = NULL;
+	Scene* scene = GTR::Scene::instance;
+
+	int num_lights = lights.size();
+	if (!num_lights)
+		return;
 
 	texture = material->color_texture.texture;
 	//texture = material->emissive_texture;
@@ -134,7 +155,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
     assert(glGetError() == GL_NO_ERROR);
 
 	//chose a shader
-	shader = Shader::Get("texture");
+	shader = Shader::Get("singlelight");
 
     assert(glGetError() == GL_NO_ERROR);
 
@@ -156,6 +177,11 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
+
+	shader->setUniform("u_ambient_light", scene->ambient_light);
+	LightEntity* light = lights[0];
+	shader->setUniform("u_light_color", light->color * light->intensity);
+	shader->setUniform("u_light_position", light->model * Vector3());
 
 	//do the draw call that renders the mesh into the screen
 	mesh->render(GL_TRIANGLES);
