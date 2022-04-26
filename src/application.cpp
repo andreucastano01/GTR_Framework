@@ -244,6 +244,7 @@ void Application::renderDebugGUI(void)
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
 	ImGui::Checkbox("Wireframe", &render_wireframe);
+	ImGui::Checkbox("Multipass", &scene->multipass);
 	ImGui::ColorEdit3("BG color", scene->background_color.v);
 	ImGui::ColorEdit3("Ambient Light", scene->ambient_light.v);
 

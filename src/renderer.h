@@ -5,10 +5,9 @@
 class Camera;
 
 namespace GTR {
-
 	class Prefab;
 	class Material;
-	
+
 	class RenderCall {
 	public:
 		Mesh* mesh;
@@ -22,9 +21,7 @@ namespace GTR {
 	// Separating the render from anything else makes the code 
 	class Renderer
 	{
-
 	public:
-
 		//add here your functions
 		std::vector<RenderCall> render_calls;
 		std::vector<LightEntity*> lights;
@@ -43,5 +40,4 @@ namespace GTR {
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);
-
 };
