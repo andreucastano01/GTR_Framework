@@ -124,8 +124,9 @@ uniform float u_alpha_cutoff;
 uniform vec3 u_ambient_light;
 
 const int MAX_LIGHTS = 5;
-uniform vec3 u_light_pos[MAX_LIGHTS];
+uniform vec3 u_light_position[MAX_LIGHTS];
 uniform vec3 u_light_color[MAX_LIGHTS];
+uniform float u_light_type[MAX_LIGHTS];
 uniform float u_light_max_distance[MAX_LIGHTS];
 uniform int u_num_lights;
 
@@ -145,9 +146,15 @@ void main()
 	vec3 light = vec3(u_ambient_light);
 	for( int i = 0; i < MAX_LIGHTS; ++i ) {
 		if(i < u_num_lights){
-			vec3 L = normalize(u_light_pos[i] - v_world_position);
+			vec3 L;
+			if(u_light_type[i] == 0) { //directional  light
+				L = normalize(u_light_position[i]);
+			}
+			else { //point and spot light
+				L = normalize(u_light_position[i] - v_world_position);
+			}
 
-			float light_distance = length(u_light_pos[i] - v_world_position);
+			float light_distance = length(u_light_position[i] - v_world_position);
 			float att_factor = u_light_max_distance[i] - light_distance;
 			att_factor = att_factor/u_light_max_distance[i];
 			att_factor = max(att_factor, 0.0);
@@ -155,8 +162,6 @@ void main()
 			float NdotL = max(dot(N,L), 0.0);
 
 			light += NdotL * u_light_color[i] * att_factor;
-
-			
 		}
 	}
 
@@ -185,6 +190,7 @@ uniform vec3 u_light_color;
 uniform vec3 u_light_position;
 uniform vec3 u_ambient_light;
 uniform float u_light_max_distance;
+uniform float u_light_type;
 
 out vec4 FragColor;
 
@@ -200,15 +206,13 @@ void main()
 
 	vec3 light = vec3(u_ambient_light);
 	
-	/*if( u_light_type == 0 ) { //directional  light
-		L = u_light_vector;
+	vec3 L;
+	if(u_light_type == 0) { //directional  light
+		L = normalize(u_light_position);
 	}
 	else { //point and spot light
-		//vector from the point to the light
 		L = normalize(u_light_position - v_world_position);
-	}*/
-
-	vec3 L = normalize(u_light_position - v_world_position);
+	}
 
 	float light_distance = length(u_light_position - v_world_position);
 	float att_factor = u_light_max_distance - light_distance;

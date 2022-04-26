@@ -144,7 +144,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
     assert(glGetError() == GL_NO_ERROR);
 
 	//chose a shader
-	shader = Shader::Get("singlepass");
+	shader = Shader::Get("multipass");
 
     assert(glGetError() == GL_NO_ERROR);
 
@@ -184,7 +184,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	}
 	else {
 		//Singlepass
-		if (material->alpha_mode == GTR::eAlphaMode::BLEND)
+		/*if (material->alpha_mode == GTR::eAlphaMode::BLEND)
 		{
 			glEnable(GL_BLEND);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -195,19 +195,24 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 		Vector3 light_position[5];
 		Vector3 light_color[5];
 		float light_max_distance[5];
+		float light_type[5];
 		for (int i = 0; i < lights.size(); i++) {
 			light_position[i] = lights[i]->model * Vector3();
 			light_color[i] = lights[i]->color * lights[i]->intensity;
 			light_max_distance[i] = lights[i]->max_distance;
+			if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
+			else light_type[i] = 1;
 		}
-		shader->setUniform3Array("u_light_pos", (float*)&light_position, 3);
+		shader->setUniform3Array("u_light_position", (float*)&light_position, 3);
 		shader->setUniform3Array("u_light_color", (float*)&light_color, 3);
 		shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, 3);
+		shader->setUniform1Array("u_light_type", (float*)&light_type, 3);
 		shader->setUniform1("u_num_lights", 2);
 		mesh->render(GL_TRIANGLES);
+		*/
 
 		//Multipass
-		/*for (int i = 0; i < lights.size(); i++) {
+		for (int i = 0; i < lights.size(); i++) {
 			if (i == 0) {
 				if (material->alpha_mode == GTR::eAlphaMode::BLEND)
 				{
@@ -224,14 +229,15 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 			LightEntity* light = lights[i];
 			shader->setUniform("u_light_color", light->color * light->intensity);
 			shader->setUniform("u_light_position", light->model * Vector3());
-			shader->setUniform("u_light_max_distance", light->max_distance);
+			shader->setFloat("u_light_max_distance", light->max_distance);
+			if(light->light_type == GTR::eLightType::DIRECTIONAL) shader->setFloat("u_light_type", 0.0);
+			else shader->setFloat("u_light_type", 1.0);
 
 			//do the draw call that renders the mesh into the screen
 			mesh->render(GL_TRIANGLES);
 
 			shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 		}
-		*/
 	}
 
 	//disable shader
