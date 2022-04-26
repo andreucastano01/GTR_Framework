@@ -127,8 +127,6 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	Scene* scene = GTR::Scene::instance;
 
 	int num_lights = lights.size();
-	if (!num_lights)
-		return;
 
 	texture = material->color_texture.texture;
 	//texture = material->emissive_texture;
@@ -138,15 +136,6 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	if (texture == NULL)
 		texture = Texture::getWhiteTexture(); //a 1x1 white texture
 
-	//select the blending
-	if (material->alpha_mode == GTR::eAlphaMode::BLEND)
-	{
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	}
-	else
-		glDisable(GL_BLEND);
-
 	//select if render both sides of the triangles
 	if(material->two_sided)
 		glDisable(GL_CULL_FACE);
@@ -155,7 +144,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
     assert(glGetError() == GL_NO_ERROR);
 
 	//chose a shader
-	shader = Shader::Get("singlelight");
+	shader = Shader::Get("singlepass");
 
     assert(glGetError() == GL_NO_ERROR);
 
@@ -177,20 +166,80 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
-
 	shader->setUniform("u_ambient_light", scene->ambient_light);
-	LightEntity* light = lights[0];
-	shader->setUniform("u_light_color", light->color * light->intensity);
-	shader->setUniform("u_light_position", light->model * Vector3());
 
-	//do the draw call that renders the mesh into the screen
-	mesh->render(GL_TRIANGLES);
+	glDepthFunc(GL_LEQUAL);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+	if (!num_lights) {
+		if (material->alpha_mode == GTR::eAlphaMode::BLEND)
+		{
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		}
+		else
+			glDisable(GL_BLEND);
+		shader->setUniform("u_light_color", Vector3());
+		mesh->render(GL_TRIANGLES);
+	}
+	else {
+		//Singlepass
+		if (material->alpha_mode == GTR::eAlphaMode::BLEND)
+		{
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		}
+		else
+			glDisable(GL_BLEND);
+
+		Vector3 light_position[5];
+		Vector3 light_color[5];
+		float light_max_distance[5];
+		for (int i = 0; i < lights.size(); i++) {
+			light_position[i] = lights[i]->model * Vector3();
+			light_color[i] = lights[i]->color * lights[i]->intensity;
+			light_max_distance[i] = lights[i]->max_distance;
+		}
+		shader->setUniform3Array("u_light_pos", (float*)&light_position, 3);
+		shader->setUniform3Array("u_light_color", (float*)&light_color, 3);
+		shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, 3);
+		shader->setUniform1("u_num_lights", 2);
+		mesh->render(GL_TRIANGLES);
+
+		//Multipass
+		/*for (int i = 0; i < lights.size(); i++) {
+			if (i == 0) {
+				if (material->alpha_mode == GTR::eAlphaMode::BLEND)
+				{
+					glEnable(GL_BLEND);
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				}
+				else
+					glDisable(GL_BLEND);
+			}
+			else {
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+				glEnable(GL_BLEND);
+			}
+			LightEntity* light = lights[i];
+			shader->setUniform("u_light_color", light->color * light->intensity);
+			shader->setUniform("u_light_position", light->model * Vector3());
+			shader->setUniform("u_light_max_distance", light->max_distance);
+
+			//do the draw call that renders the mesh into the screen
+			mesh->render(GL_TRIANGLES);
+
+			shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+		}
+		*/
+	}
 
 	//disable shader
 	shader->disable();
 
 	//set the render state as it was before to avoid problems with future renders
 	glDisable(GL_BLEND);
+	glDepthFunc(GL_LESS);
 }
 
 

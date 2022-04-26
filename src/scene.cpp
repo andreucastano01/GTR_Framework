@@ -174,6 +174,10 @@ GTR::LightEntity::LightEntity()
 	entity_type = eEntityType::LIGHT;
 	color.set(1, 1, 1);
 	intensity = 1;
+	max_distance = 100;
+	cone_angle = 45;
+	cone_exp = 60;
+	area_size = 1000;
 }
 
 void GTR::LightEntity::configure(cJSON* json) {
@@ -201,4 +205,8 @@ void GTR::LightEntity::renderInMenu() {
 	ImGui::Text("Light type: %s", str.c_str());
 	ImGui::ColorEdit3("Color", color.v);
 	ImGui::DragFloat("Intensity", &intensity);
+	ImGui::DragFloat("Max distance", &max_distance);
+	ImGui::DragFloat("Cone angle", &cone_angle);
+	ImGui::DragFloat("Cone exponent", &cone_exp);
+	ImGui::DragFloat("Area size", &area_size);
 }

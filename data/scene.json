@@ -10,7 +10,7 @@
 			"name":"floor",
 			"type":"PREFAB",
 			"filename":"prefabs/floor.glb",
-			"position":[0,0,0]
+			"position":[0,1,0]
 		},
 		{
 			"name":"car1",

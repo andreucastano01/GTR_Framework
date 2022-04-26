@@ -1,7 +1,8 @@
 //example of some shaders compiled
 flat basic.vs flat.fs
 texture basic.vs texture.fs
-singlelight basic.vs singlelight.fs
+singlepass basic.vs singlepass.fs
+multipass basic.vs multipass.fs
 depth quad.vs depth.fs
 multi basic.vs multi.fs
 
@@ -105,8 +106,67 @@ void main()
 	FragColor = color;
 }
 
+\singlepass.fs
 
-\singlelight.fs
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+in vec2 v_uv;
+in vec4 v_color;
+
+uniform vec4 u_color;
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+
+uniform vec3 u_ambient_light;
+
+const int MAX_LIGHTS = 5;
+uniform vec3 u_light_pos[MAX_LIGHTS];
+uniform vec3 u_light_color[MAX_LIGHTS];
+uniform float u_light_max_distance[MAX_LIGHTS];
+uniform int u_num_lights;
+
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 N = normalize(v_normal);
+	vec2 uv = v_uv;
+	vec4 color = u_color;
+	color *= texture( u_texture, v_uv );
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 light = vec3(u_ambient_light);
+	for( int i = 0; i < MAX_LIGHTS; ++i ) {
+		if(i < u_num_lights){
+			vec3 L = normalize(u_light_pos[i] - v_world_position);
+
+			float light_distance = length(u_light_pos[i] - v_world_position);
+			float att_factor = u_light_max_distance[i] - light_distance;
+			att_factor = att_factor/u_light_max_distance[i];
+			att_factor = max(att_factor, 0.0);
+			att_factor *= pow(att_factor, 2.0);
+			float NdotL = max(dot(N,L), 0.0);
+
+			light += NdotL * u_light_color[i] * att_factor;
+
+			
+		}
+	}
+
+	color.xyz *= light;
+
+	FragColor = color;
+}
+
+
+\multipass.fs
 
 #version 330 core
 
@@ -124,6 +184,7 @@ uniform float u_alpha_cutoff;
 uniform vec3 u_light_color;
 uniform vec3 u_light_position;
 uniform vec3 u_ambient_light;
+uniform float u_light_max_distance;
 
 out vec4 FragColor;
 
@@ -138,14 +199,31 @@ void main()
 		discard;
 
 	vec3 light = vec3(u_ambient_light);
+	
+	/*if( u_light_type == 0 ) { //directional  light
+		L = u_light_vector;
+	}
+	else { //point and spot light
+		//vector from the point to the light
+		L = normalize(u_light_position - v_world_position);
+	}*/
+
 	vec3 L = normalize(u_light_position - v_world_position);
+
+	float light_distance = length(u_light_position - v_world_position);
+	float att_factor = u_light_max_distance - light_distance;
+	att_factor = att_factor/u_light_max_distance;
+	att_factor = max(att_factor, 0.0);
+	att_factor *= pow(att_factor, 2.0);
+
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
-	light += NdotL * u_light_color;
+	light += NdotL * u_light_color * att_factor;
 
 	color.xyz *= light;
 
 	FragColor = color;
 }
+
 
 \multi.fs
 
