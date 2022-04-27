@@ -168,8 +168,6 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
-	shader->setUniform("u_emissive_factor", material->emissive_texture.texture);
-	shader->setUniform("u_occlusion", material->metallic_roughness_texture.texture);
 
 	glDepthFunc(GL_LEQUAL);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -212,7 +210,7 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, 3);
 			shader->setUniform1Array("u_light_type", (float*)&light_type, 3);
 			shader->setUniform1("u_num_lights", 3);
-			mesh->render(GL_TRIANGLES);
+			mesh->render(GL_TRIANGLES);		
 		}
 		//Multipass
 		else {
@@ -240,8 +238,8 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 				//do the draw call that renders the mesh into the screen
 				mesh->render(GL_TRIANGLES);
 
+
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
-				shader->setUniform("u_emissive_factor", Vector3()); //Solo queremos pintar 1 el factor emisivo
 			}
 		}
 	}

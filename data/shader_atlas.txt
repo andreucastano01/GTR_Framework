@@ -122,8 +122,6 @@ uniform float u_time;
 uniform float u_alpha_cutoff;
 
 uniform vec3 u_ambient_light;
-uniform vec3 u_emissive_factor;
-uniform vec3 u_occlusion;
 
 const int MAX_LIGHTS = 5;
 uniform vec3 u_light_position[MAX_LIGHTS];
@@ -146,9 +144,7 @@ void main()
 		discard;
 
 	vec3 light = vec3(u_ambient_light);
-	//light *= u_occlusion.x;
-
-	for( int i = 0; i < MAX_LIGHTS; i++) {
+	for( int i = 0; i < MAX_LIGHTS; ++i ) {
 		if(i < u_num_lights){
 			vec3 L;
 			if(u_light_type[i] == 0) { //directional  light
@@ -170,7 +166,6 @@ void main()
 	}
 
 	color.xyz *= light;
-	color.xyz += u_emissive_factor;
 
 	FragColor = color;
 }
@@ -191,12 +186,9 @@ uniform sampler2D u_texture;
 uniform float u_time;
 uniform float u_alpha_cutoff;
 
-uniform vec3 u_ambient_light;
-uniform vec3 u_emissive_factor;
-uniform vec3 u_occlusion;
-
 uniform vec3 u_light_color;
 uniform vec3 u_light_position;
+uniform vec3 u_ambient_light;
 uniform float u_light_max_distance;
 uniform float u_light_type;
 
@@ -213,7 +205,6 @@ void main()
 		discard;
 
 	vec3 light = vec3(u_ambient_light);
-	//light *= u_occlusion.x;
 	
 	vec3 L;
 	if(u_light_type == 0) { //directional  light
@@ -233,7 +224,6 @@ void main()
 	light += NdotL * u_light_color * att_factor;
 
 	color.xyz *= light;
-	color.xyz += u_emissive_factor;
 
 	FragColor = color;
 }
