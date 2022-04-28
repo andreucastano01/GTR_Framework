@@ -129,12 +129,45 @@ uniform vec3 u_light_color[MAX_LIGHTS];
 uniform int u_light_type[MAX_LIGHTS];
 uniform float u_light_max_distance[MAX_LIGHTS];
 uniform vec3 u_light_cone[MAX_LIGHTS];
+uniform vec3 u_light_vector[MAX_LIGHTS];
 uniform vec3 u_light_front[MAX_LIGHTS];
 uniform int u_num_lights;
 
+uniform int u_light_cast_shadows[MAX_LIGHTS];
+uniform sampler2D u_light_shadowmap[MAX_LIGHTS];
+uniform mat4 u_light_shadowmap_vp[MAX_LIGHTS];
+uniform float u_light_shadow_bias[MAX_LIGHTS];
 
 out vec4 FragColor;
 
+/*float testShadowMap(vec3 pos){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_light_shadowmap_vp[i] * vec4(pos,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_light_shadow_bias) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//read depth from depth buffer in [0..+1] non-linear
+	float shadow_depth = texture(u_light_shadowmap, shadow_uv).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth )
+		shadow_factor = 0.0;
+
+	return shadow_factor;
+}*/
 
 void main()
 {
@@ -147,7 +180,8 @@ void main()
 		discard;
 
 	vec3 light = vec3(u_ambient_light);
-	for( int i = 0; i < MAX_LIGHTS; i++) {
+	
+	for(int i = 0; i < MAX_LIGHTS; i++) {
 		if(i < u_num_lights){
 			vec3 L;
 			float spotFactor = 1.0;
@@ -158,7 +192,7 @@ void main()
 					vec3 D = normalize(u_light_front[i]);
 					float spotCosine = dot(D, -L);
 					if (spotCosine >= u_light_cone[i].z) {
-					spotFactor = pow(spotCosine, u_light_cone[i].y);
+						spotFactor = pow(spotCosine, u_light_cone[i].y);
 					} 
 					else spotFactor = 0.0; // The light will add no color to the point.
 				}
@@ -175,13 +209,15 @@ void main()
 			att_factor *= pow(att_factor, 2.0);
 
 			if(u_light_type[i] == 0) { //directional  light
-				L = normalize(u_light_position[i]);
+				L = normalize(u_light_vector[i]);
 				att_factor = 1.0;
 			}
 
-			float NdotL = max(dot(N,L), 0.0);
+			float ShadowFactor = 1.0;
+			//if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position);
 
-			light += NdotL * u_light_color[i] * att_factor * spotFactor;
+			float NdotL = clamp(dot(N, L), 0.0, 1.0);
+			light += NdotL * u_light_color[i] * att_factor * spotFactor * ShadowFactor;;
 		}
 	}
 
@@ -222,7 +258,7 @@ uniform float u_light_shadow_bias;
 
 out vec4 FragColor;
 
-float testShadowMap(vec3 pos){
+float testShadowMapSpot(vec3 pos){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_light_shadowmap_vp * vec4(pos,1.0);
 
@@ -251,13 +287,49 @@ float testShadowMap(vec3 pos){
 	return shadow_factor;
 }
 
+float testShadowMapDirectional(vec3 pos){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_light_shadowmap_vp * vec4(pos,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - 0.01) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//read depth from depth buffer in [0..+1] non-linear
+	float shadow_depth = texture(u_light_shadowmap, shadow_uv).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth )
+		shadow_factor = 0.0;
+
+	//it is outside on the sides
+	if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 )
+		shadow_factor = 1.0;
+
+	//it is before near or behind far plane
+	if(real_depth < 0.0 || real_depth > 1.0)
+		shadow_factor = 1.0;
+
+	return shadow_factor;
+}
 
 void main()
 {
 	vec3 N = normalize(v_normal);
 	vec2 uv = v_uv;
 	vec4 color = u_color;
-	color *= texture( u_texture, v_uv );
+	color *= texture(u_texture, v_uv);
 
 	if(color.a < u_alpha_cutoff)
 		discard;
@@ -266,10 +338,7 @@ void main()
 	
 	vec3 L;
 	float spotFactor = 1.0;
-	
-	if(u_light_type == 0) { //directional  light
-		L = normalize(u_light_position);
-	}
+	float ShadowFactor = 1.0;
 
 	if(u_light_type == 1) { //spot light
 		L = normalize(u_light_position - v_world_position);
@@ -277,10 +346,11 @@ void main()
 			vec3 D = normalize(u_light_front);
 			float spotCosine = dot(D, -L);
 			if (spotCosine >= u_light_cone.z) {
-            spotFactor = pow(spotCosine, u_light_cone.y);
+				spotFactor = pow(spotCosine, u_light_cone.y);
 			} 
 			else spotFactor = 0.0; // The light will add no color to the point.
 		}
+		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMapSpot(v_world_position);
 	}
 	
 	if(u_light_type == 2) { //point light
@@ -296,10 +366,8 @@ void main()
 	if(u_light_type == 0) { //directional  light
 		L = normalize(u_light_vector);
 		att_factor = 1.0;
+		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMapDirectional(v_world_position);
 	}
-
-	float ShadowFactor = 1.0;
-	if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(v_world_position);
 
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
 	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
