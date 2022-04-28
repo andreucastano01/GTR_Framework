@@ -126,8 +126,10 @@ uniform vec3 u_ambient_light;
 const int MAX_LIGHTS = 5;
 uniform vec3 u_light_position[MAX_LIGHTS];
 uniform vec3 u_light_color[MAX_LIGHTS];
-uniform float u_light_type[MAX_LIGHTS];
+uniform int u_light_type[MAX_LIGHTS];
 uniform float u_light_max_distance[MAX_LIGHTS];
+uniform vec3 u_light_cone[MAX_LIGHTS];
+uniform vec3 u_light_front[MAX_LIGHTS];
 uniform int u_num_lights;
 
 
@@ -147,10 +149,25 @@ void main()
 	for( int i = 0; i < MAX_LIGHTS; ++i ) {
 		if(i < u_num_lights){
 			vec3 L;
+			float spotFactor = 1.0;
+
 			if(u_light_type[i] == 0) { //directional  light
 				L = normalize(u_light_position[i]);
 			}
-			else { //point and spot light
+
+			if(u_light_type[i] == 1) { //spot light
+				L = normalize(u_light_position[i] - v_world_position);
+				if (u_light_cone[i].z > 0){
+					vec3 D = normalize(u_light_front[i]);
+					float spotCosine = dot(D, -L);
+					if (spotCosine >= u_light_cone[i].z) {
+					spotFactor = pow(spotCosine, u_light_cone[i].y);
+					} 
+					else spotFactor = 0.0; // The light will add no color to the point.
+				}
+			}
+	
+			else { //point light
 				L = normalize(u_light_position[i] - v_world_position);
 			}
 
@@ -161,7 +178,7 @@ void main()
 			att_factor *= pow(att_factor, 2.0);
 			float NdotL = max(dot(N,L), 0.0);
 
-			light += NdotL * u_light_color[i] * att_factor;
+			light += NdotL * u_light_color[i] * att_factor * spotFactor;
 		}
 	}
 
@@ -189,8 +206,10 @@ uniform float u_alpha_cutoff;
 uniform vec3 u_light_color;
 uniform vec3 u_light_position;
 uniform vec3 u_ambient_light;
+uniform vec3 u_light_cone;
+uniform vec3 u_light_front;
 uniform float u_light_max_distance;
-uniform float u_light_type;
+uniform int u_light_type;
 
 out vec4 FragColor;
 
@@ -207,10 +226,25 @@ void main()
 	vec3 light = vec3(u_ambient_light);
 	
 	vec3 L;
+	float spotFactor = 1.0;
+	
 	if(u_light_type == 0) { //directional  light
 		L = normalize(u_light_position);
 	}
-	else { //point and spot light
+
+	if(u_light_type == 1) { //spot light
+		L = normalize(u_light_position - v_world_position);
+		if (u_light_cone.z > 0){
+			vec3 D = normalize(u_light_front);
+			float spotCosine = dot(D, -L);
+			if (spotCosine >= u_light_cone.z) {
+            spotFactor = pow(spotCosine, u_light_cone.y);
+			} 
+			else spotFactor = 0.0; // The light will add no color to the point.
+		}
+	}
+	
+	else { //point light
 		L = normalize(u_light_position - v_world_position);
 	}
 
@@ -221,7 +255,7 @@ void main()
 	att_factor *= pow(att_factor, 2.0);
 
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
-	light += NdotL * u_light_color * att_factor;
+	light += NdotL * u_light_color * att_factor * spotFactor;
 
 	color.xyz *= light;
 

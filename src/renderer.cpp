@@ -196,19 +196,26 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 
 			Vector3 light_position[5];
 			Vector3 light_color[5];
+			Vector3 light_front[5];
+			Vector3 light_cone[5];
 			float light_max_distance[5];
 			float light_type[5];
 			for (int i = 0; i < lights.size(); i++) {
 				light_position[i] = lights[i]->model * Vector3();
 				light_color[i] = lights[i]->color * lights[i]->intensity;
 				light_max_distance[i] = lights[i]->max_distance;
+				light_front[i] = lights[i]->model.rotateVector(Vector3(0, 0, -1));
+				light_cone[i] = Vector3(lights[i]->cone_angle, lights[i]->cone_exp, cos(lights[i]->cone_angle * DEG2RAD));
 				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
-				else light_type[i] = 1;
+				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
+				else light_type[i] = 2;
 			}
 			shader->setUniform3Array("u_light_position", (float*)&light_position, 3);
 			shader->setUniform3Array("u_light_color", (float*)&light_color, 3);
+			shader->setUniform3Array("u_light_front", (float*)&light_front, 3);
+			shader->setUniform3Array("u_light_cone", (float*)&light_cone, 3);
 			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, 3);
-			shader->setUniform1Array("u_light_type", (float*)&light_type, 3);
+			shader->setUniform1Array("u_light_type", (int*)&light_type, 3);
 			shader->setUniform1("u_num_lights", 3);
 			mesh->render(GL_TRIANGLES);		
 		}
@@ -231,9 +238,14 @@ void Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Mat
 				LightEntity* light = lights[i];
 				shader->setUniform("u_light_color", light->color * light->intensity);
 				shader->setUniform("u_light_position", light->model * Vector3());
-				shader->setFloat("u_light_max_distance", light->max_distance);
-				if (light->light_type == GTR::eLightType::DIRECTIONAL) shader->setFloat("u_light_type", 0.0);
-				else shader->setFloat("u_light_type", 1.0);
+				shader->setUniform("u_light_max_distance", light->max_distance);
+
+				shader->setUniform("u_light_cone", Vector3(light->cone_angle, light->cone_exp, cos(light->cone_angle * DEG2RAD)));
+				shader->setUniform("u_light_front", light->model.rotateVector(Vector3(0, 0, -1)));
+
+				if (light->light_type == GTR::eLightType::DIRECTIONAL) shader->setUniform("u_light_type", 0);
+				else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
+				else shader->setUniform("u_light_type", 2);
 
 				//do the draw call that renders the mesh into the screen
 				mesh->render(GL_TRIANGLES);
