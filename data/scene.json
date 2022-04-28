@@ -83,7 +83,7 @@
 			"cone_exp":20,
 			"light_type":"SPOT",
 			"cast_shadows": true,
-			"shadow_bias": 0.001
+			"shadow_bias": 0.01
 		},
 		{
 			"name":"pointlight",

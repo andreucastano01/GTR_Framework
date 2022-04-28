@@ -61,7 +61,8 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 	}
 
 	for (int i = 0; i < render_calls.size(); i++) {
-		renderMeshWithMaterial(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
+		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+			renderMeshWithMaterial(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 
 	glViewport(Application::instance->window_width-256, 0, 256, 256);
@@ -74,7 +75,7 @@ void GTR::Renderer::showShadowMap(LightEntity* light) {
 	Shader* shader = Shader::getDefaultShader("depth");
 	shader->enable();
 	shader->setUniform("u_camera_nearfar", Vector2(light->light_camera->near_plane, light->light_camera->far_plane));
-	light->shadowmap->toViewport();
+	light->fbo->depth_texture->toViewport(shader);
 }
 
 //renders all the prefab
@@ -100,22 +101,19 @@ void GTR::Renderer::renderNode(const Matrix44& prefab_model, GTR::Node* node, Ca
 		//compute the bounding box of the object in world space (by using the mesh bounding box transformed to world space)
 		BoundingBox world_bounding = transformBoundingBox(node_model,node->mesh->box);
 		
-		//if bounding box is inside the camera frustum then the object is probably visible
-		if (camera->testBoxInFrustum(world_bounding.center, world_bounding.halfsize) )
-		{
-			//render node mesh
-			RenderCall rc;
-			Vector3 nodepos = node_model.getTranslation();
-			rc.mesh = node->mesh;
-			rc.material = node->material;
-			rc.model = node_model;
-			rc.distance_to_camera = nodepos.distance(camera->eye);
-			if (node->material->alpha_mode == GTR::eAlphaMode::BLEND) rc.distance_to_camera += 1000000;
-			render_calls.push_back(rc);
+		//render node mesh
+		RenderCall rc;
+		Vector3 nodepos = node_model.getTranslation();
+		rc.mesh = node->mesh;
+		rc.material = node->material;
+		rc.model = node_model;
+		rc.world_bounding = world_bounding;
+		rc.distance_to_camera = nodepos.distance(camera->eye);
+		if (node->material->alpha_mode == GTR::eAlphaMode::BLEND) rc.distance_to_camera += 1000000;
+		render_calls.push_back(rc);
 
-			//renderMeshWithMaterial( node_model, node->mesh, node->material, camera);
-			//node->mesh->renderBounding(node_model, true);
-		}
+		//renderMeshWithMaterial( node_model, node->mesh, node->material, camera);
+		//node->mesh->renderBounding(node_model, true);
 	}
 
 	//iterate recursively with children
@@ -257,6 +255,16 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
 				else shader->setUniform("u_light_type", 2);
 
+				if (light->shadowmap) {
+					shader->setUniform("u_light_cast_shadows", 1);
+					shader->setUniform("u_light_shadowmap", light->shadowmap, 1);
+					shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
+					shader->setUniform("u_light_shadow_bias", light->shadow_bias);
+				}
+				else {
+					shader->setUniform("u_light_cast_shadows", 0);
+				}
+
 				//do the draw call that renders the mesh into the screen
 				mesh->render(GL_TRIANGLES);
 
@@ -276,6 +284,8 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 //Generates a ShadowMap for the given light
 void GTR::Renderer::generateShadowMap(LightEntity* light) {
+	if (light->light_type != GTR::eLightType::SPOT) return;
+
 	if (!light->cast_shadows) { //No estas haciendo un control de errores extra?
 		if (light->fbo) {
 			delete light->fbo;
@@ -305,7 +315,8 @@ void GTR::Renderer::generateShadowMap(LightEntity* light) {
 
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
-		renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
+		if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+			renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
 	}
 
 	light->fbo->unbind();

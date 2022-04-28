@@ -14,6 +14,7 @@ namespace GTR {
 		Material* material;
 		Matrix44 model;
 
+		BoundingBox world_bounding;
 		float distance_to_camera;
 	};
 	

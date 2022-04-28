@@ -217,5 +217,5 @@ void GTR::LightEntity::renderInMenu() {
 	ImGui::DragFloat("Cone exponent", &cone_exp);
 	ImGui::DragFloat("Area size", &area_size);
 	ImGui::Checkbox("Cast_shadows", &cast_shadows);
-	ImGui::DragFloat("Shadow bias", &shadow_bias);
+	ImGui::DragFloat("Shadow bias", &shadow_bias, 0.01);
 }
