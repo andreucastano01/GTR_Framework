@@ -180,6 +180,7 @@ GTR::LightEntity::LightEntity()
 	cone_angle = 20;
 	cone_exp = 20;
 	area_size = 1000;
+	target.set(0, 0, 0);
 	fbo = NULL;
 	shadowmap = NULL;
 	light_camera = NULL;
@@ -196,6 +197,7 @@ void GTR::LightEntity::configure(cJSON* json) {
 	cone_angle = readJSONNumber(json, "cone_angle", cone_angle);
 	cone_exp = readJSONNumber(json, "cone_exp", cone_exp);
 	area_size = readJSONNumber(json, "area_size", area_size);
+	target = readJSONVector3(json, "target", target);
 	cast_shadows = readJSONBool(json, "cast_shadows", false);
 	shadow_bias = readJSONNumber(json, "shadow_bias", shadow_bias);
 }
@@ -216,6 +218,7 @@ void GTR::LightEntity::renderInMenu() {
 	ImGui::DragFloat("Cone angle", &cone_angle);
 	ImGui::DragFloat("Cone exponent", &cone_exp);
 	ImGui::DragFloat("Area size", &area_size);
+	ImGui::ColorEdit3("target", target.v);
 	ImGui::Checkbox("Cast_shadows", &cast_shadows);
 	ImGui::DragFloat("Shadow bias", &shadow_bias, 0.01);
 }

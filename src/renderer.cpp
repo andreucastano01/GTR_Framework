@@ -76,6 +76,7 @@ void GTR::Renderer::showShadowMap(LightEntity* light) {
 	shader->enable();
 	shader->setUniform("u_camera_nearfar", Vector2(light->light_camera->near_plane, light->light_camera->far_plane));
 	light->fbo->depth_texture->toViewport(shader);
+	glEnable(GL_DEPTH_TEST);
 }
 
 //renders all the prefab
@@ -214,17 +215,17 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				light_max_distance[i] = lights[i]->max_distance;
 				light_front[i] = lights[i]->model.rotateVector(Vector3(0, 0, -1));
 				light_cone[i] = Vector3(lights[i]->cone_angle, lights[i]->cone_exp, cos(lights[i]->cone_angle * DEG2RAD));
-				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0; //No funciona la direccional en el singlepass, preguntar agenjo
+				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
 				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
-				else light_type[i] = 2; //Preguntar por el area size
+				else light_type[i] = 2; 
 			}
-			shader->setUniform3Array("u_light_position", (float*)&light_position, 4);
-			shader->setUniform3Array("u_light_color", (float*)&light_color, 4);
-			shader->setUniform3Array("u_light_front", (float*)&light_front, 4);
-			shader->setUniform3Array("u_light_cone", (float*)&light_cone, 4);
-			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, 4);
-			shader->setUniform1Array("u_light_type", (int*)&light_type, 4);
-			shader->setUniform1("u_num_lights", 4);
+			shader->setUniform3Array("u_light_position", (float*)&light_position, num_lights);
+			shader->setUniform3Array("u_light_color", (float*)&light_color, num_lights);
+			shader->setUniform3Array("u_light_front", (float*)&light_front, num_lights);
+			shader->setUniform3Array("u_light_cone", (float*)&light_cone, num_lights);
+			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, num_lights);
+			shader->setUniform1Array("u_light_type", (int*)&light_type, num_lights);
+			shader->setUniform("u_num_lights", num_lights);
 			mesh->render(GL_TRIANGLES);		
 		}
 		//Multipass
@@ -253,7 +254,10 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 				if (light->light_type == GTR::eLightType::DIRECTIONAL) shader->setUniform("u_light_type", 0);
 				else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
-				else shader->setUniform("u_light_type", 2);
+				else {
+					shader->setUniform("u_light_type", 2);
+					shader->setUniform("u_light_vector", light->model * Vector3() - light->target);
+				}
 
 				if (light->shadowmap) {
 					shader->setUniform("u_light_cast_shadows", 1);
@@ -267,7 +271,6 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 				//do the draw call that renders the mesh into the screen
 				mesh->render(GL_TRIANGLES);
-
 
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 			}
@@ -284,44 +287,84 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 //Generates a ShadowMap for the given light
 void GTR::Renderer::generateShadowMap(LightEntity* light) {
-	if (light->light_type != GTR::eLightType::SPOT) return;
-
-	if (!light->cast_shadows) { //No estas haciendo un control de errores extra?
-		if (light->fbo) {
-			delete light->fbo;
-			light->fbo = NULL;
-			light->shadowmap = NULL;
+	//Para hacer las sombras direccionales necesitamos una camara ortogonal en vez de perspectiva
+	if (light->light_type == GTR::eLightType::DIRECTIONAL) {
+		if (!light->cast_shadows) { //No estas haciendo un control de errores extra?
+			if (light->fbo) {
+				delete light->fbo;
+				light->fbo = NULL;
+				light->shadowmap = NULL;
+			}
+			return;
 		}
-		return;
+
+		if (!light->fbo) {
+			light->fbo = new FBO();
+			light->fbo->setDepthOnly(1024, 1024);
+			light->shadowmap = light->fbo->depth_texture;
+		}
+
+		if (!light->light_camera) light->light_camera = new Camera();
+
+		light->fbo->bind();
+
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		Camera* current_camera = Camera::current;
+		Camera* light_camera = light->light_camera;
+		light_camera->setOrthographic(light_camera->center.x - (light->area_size / 2), light_camera->center.x + (light->area_size / 2), light_camera->center.y - (light->area_size / 2), light_camera->center.y + (light->area_size / 2), 0.1, light->max_distance);
+		light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
+		light_camera->enable();
+
+		for (int i = 0; i < render_calls.size(); i++) {
+			if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
+			if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+				renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
+		}
+
+		light->fbo->unbind();
+
+		current_camera->enable();
 	}
+	else if (light->light_type == GTR::eLightType::SPOT) {
+		if (!light->cast_shadows) { //No estas haciendo un control de errores extra?
+			if (light->fbo) {
+				delete light->fbo;
+				light->fbo = NULL;
+				light->shadowmap = NULL;
+			}
+			return;
+		}
 
-	if (!light->fbo) {
-		light->fbo = new FBO();
-		light->fbo->setDepthOnly(1024, 1024);
-		light->shadowmap = light->fbo->depth_texture;
+		if (!light->fbo) {
+			light->fbo = new FBO();
+			light->fbo->setDepthOnly(1024, 1024);
+			light->shadowmap = light->fbo->depth_texture;
+		}
+
+		if (!light->light_camera) light->light_camera = new Camera();
+
+		light->fbo->bind();
+
+		glClear(GL_DEPTH_BUFFER_BIT);
+
+		Camera* current_camera = Camera::current;
+		Camera* light_camera = light->light_camera;
+		light_camera->setPerspective(light->cone_angle, 1.0, 0.1, light->max_distance);
+		light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
+		light_camera->enable();
+
+		for (int i = 0; i < render_calls.size(); i++) {
+			if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
+			if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+				renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
+		}
+
+		light->fbo->unbind();
+
+		current_camera->enable();
 	}
-
-	if (!light->light_camera) light->light_camera = new Camera();
-
-	light->fbo->bind();
-
-	glClear(GL_DEPTH_BUFFER_BIT);
-
-	Camera* current_camera = Camera::current;
-	Camera* light_camera = light->light_camera;
-	light_camera->setPerspective(light->cone_angle, 1.0, 0.1, light->max_distance);
-	light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
-	light_camera->enable();
-
-	for (int i = 0; i < render_calls.size(); i++) {
-		if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
-		if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
-			renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
-	}
-
-	light->fbo->unbind();
-
-	current_camera->enable();
+	else return;
 }
 
 void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera) {

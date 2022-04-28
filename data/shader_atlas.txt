@@ -135,6 +135,7 @@ uniform int u_num_lights;
 
 out vec4 FragColor;
 
+
 void main()
 {
 	vec3 N = normalize(v_normal);
@@ -151,10 +152,6 @@ void main()
 			vec3 L;
 			float spotFactor = 1.0;
 
-			if(u_light_type[i] == 0) { //directional  light
-				L = normalize(u_light_position[i]);
-			}
-
 			if(u_light_type[i] == 1) { //spot light
 				L = normalize(u_light_position[i] - v_world_position);
 				if (u_light_cone[i].z > 0){
@@ -167,7 +164,7 @@ void main()
 				}
 			}
 	
-			else { //point light
+			if(u_light_type[i] == 2) { //point light
 				L = normalize(u_light_position[i] - v_world_position);
 			}
 
@@ -176,6 +173,12 @@ void main()
 			att_factor = att_factor/u_light_max_distance[i];
 			att_factor = max(att_factor, 0.0);
 			att_factor *= pow(att_factor, 2.0);
+
+			if(u_light_type[i] == 0) { //directional  light
+				L = normalize(u_light_position[i]);
+				att_factor = 1.0;
+			}
+
 			float NdotL = max(dot(N,L), 0.0);
 
 			light += NdotL * u_light_color[i] * att_factor * spotFactor;
@@ -208,6 +211,7 @@ uniform vec3 u_light_position;
 uniform vec3 u_ambient_light;
 uniform vec3 u_light_cone;
 uniform vec3 u_light_front;
+uniform vec3 u_light_vector;
 uniform float u_light_max_distance;
 uniform int u_light_type;
 
@@ -279,7 +283,7 @@ void main()
 		}
 	}
 	
-	else { //point light
+	if(u_light_type == 2) { //point light
 		L = normalize(u_light_position - v_world_position);
 	}
 
@@ -288,6 +292,11 @@ void main()
 	att_factor = att_factor/u_light_max_distance;
 	att_factor = max(att_factor, 0.0);
 	att_factor *= pow(att_factor, 2.0);
+
+	if(u_light_type == 0) { //directional  light
+		L = normalize(u_light_vector);
+		att_factor = 1.0;
+	}
 
 	float ShadowFactor = 1.0;
 	if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(v_world_position);
