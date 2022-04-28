@@ -146,7 +146,7 @@ void main()
 		discard;
 
 	vec3 light = vec3(u_ambient_light);
-	for( int i = 0; i < MAX_LIGHTS; ++i ) {
+	for( int i = 0; i < MAX_LIGHTS; i++) {
 		if(i < u_num_lights){
 			vec3 L;
 			float spotFactor = 1.0;
