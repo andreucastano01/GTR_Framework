@@ -173,10 +173,20 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 	shader->setUniform("u_color", material->color);
 	if(texture)
 		shader->setUniform("u_texture", texture, 0);
+	texture = material->emissive_texture.texture;
+	if (texture)
+		shader->setUniform("u_texture_emissive", texture, 1);
+	texture = material->occlusion_texture.texture;
+	if (texture)
+		shader->setUniform("u_texture_occlusion", texture, 2);
+	texture = material->normal_texture.texture;
+	if (texture)
+		shader->setUniform("u_texture_normal", texture, 3);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
+	shader->setUniform("u_emissive_factor", material->emissive_factor);
 
 	glDepthFunc(GL_LEQUAL);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
@@ -217,15 +227,18 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				light_max_distance[i] = lights[i]->max_distance;
 				light_front[i] = lights[i]->model.rotateVector(Vector3(0, 0, -1));
 				light_cone[i] = Vector3(lights[i]->cone_angle, lights[i]->cone_exp, cos(lights[i]->cone_angle * DEG2RAD));
+
+
 				light_vector[i] = lights[i]->model * Vector3() - lights[i]->target;
 				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
 				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
-				else light_type[i] = 2; 
+				else light_type[i] = 2;
 			}
 			shader->setUniform3Array("u_light_position", (float*)&light_position, num_lights);
 			shader->setUniform3Array("u_light_color", (float*)&light_color, num_lights);
 			shader->setUniform3Array("u_light_front", (float*)&light_front, num_lights);
 			shader->setUniform3Array("u_light_cone", (float*)&light_cone, num_lights);
+			shader->setUniform3Array("u_light_vector", (float*)&light_vector, num_lights);
 			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, num_lights);
 			shader->setUniform1Array("u_light_type", (int*)&light_type, num_lights);
 			shader->setUniform("u_num_lights", num_lights);
@@ -265,7 +278,7 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 				if (light->shadowmap) {
 					shader->setUniform("u_light_cast_shadows", 1);
-					shader->setUniform("u_light_shadowmap", light->shadowmap, 1);
+					shader->setUniform("u_light_shadowmap", light->shadowmap, 4);
 					shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
 					shader->setUniform("u_light_shadow_bias", light->shadow_bias);
 				}
@@ -277,6 +290,7 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				mesh->render(GL_TRIANGLES);
 
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+				shader->setUniform("u_emissive_factor", Vector3());
 			}
 		}
 	}

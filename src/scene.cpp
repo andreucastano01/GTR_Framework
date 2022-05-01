@@ -184,6 +184,7 @@ GTR::LightEntity::LightEntity()
 	fbo = NULL;
 	shadowmap = NULL;
 	light_camera = NULL;
+	shadow_bias = 0.01;
 }
 
 void GTR::LightEntity::configure(cJSON* json) {
@@ -218,7 +219,6 @@ void GTR::LightEntity::renderInMenu() {
 	ImGui::DragFloat("Cone angle", &cone_angle);
 	ImGui::DragFloat("Cone exponent", &cone_exp);
 	ImGui::DragFloat("Area size", &area_size);
-	ImGui::ColorEdit3("target", target.v);
 	ImGui::Checkbox("Cast_shadows", &cast_shadows);
 	ImGui::DragFloat("Shadow bias", &shadow_bias, 0.01);
 }
