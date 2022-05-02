@@ -66,7 +66,7 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 	}
 
 	glViewport(Application::instance->window_width-256, 0, 256, 256);
-	showShadowMap(lights[3]);
+	showShadowMap(lights[0]);
 	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
 }
 
@@ -133,6 +133,9 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 	//define locals to simplify coding
 	Shader* shader = NULL;
 	Texture* texture = NULL;
+	Texture* emissive_texture = NULL;
+	Texture* occlusion_texture = NULL;
+	Texture* normal_texture = NULL;
 	Scene* scene = GTR::Scene::instance;
 
 	int num_lights = lights.size();
@@ -173,15 +176,23 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 	shader->setUniform("u_color", material->color);
 	if(texture)
 		shader->setUniform("u_texture", texture, 0);
-	texture = material->emissive_texture.texture;
-	if (texture)
-		shader->setUniform("u_texture_emissive", texture, 1);
-	texture = material->occlusion_texture.texture;
-	if (texture)
-		shader->setUniform("u_texture_occlusion", texture, 2);
-	texture = material->normal_texture.texture;
-	if (texture)
-		shader->setUniform("u_texture_normal", texture, 3);
+	
+	emissive_texture = material->emissive_texture.texture;
+	if (emissive_texture)
+		shader->setUniform("u_texture_emissive", emissive_texture, 1);
+	
+	occlusion_texture = material->metallic_roughness_texture.texture;
+	if (occlusion_texture) {
+		shader->setUniform("u_texture_occlusion", occlusion_texture, 2);
+		shader->setUniform("u_have_occlusion_texture", 1);
+	}
+	else shader->setUniform("u_have_occlusion_texture", 0);
+	
+	normal_texture = material->normal_texture.texture;
+	if (normal_texture) {
+		shader->setUniform("u_texture_normal", normal_texture, 3);
+		shader->setUniform("u_have_normal_texture", 1); //Un prefab puede no tener un normal_map
+	} else shader->setUniform("u_have_normal_texture", 0);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
@@ -214,11 +225,15 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 			else
 				glDisable(GL_BLEND);
 
-			Vector3 light_position[5];
+			Vector3 light_position[5] = {};
 			Vector3 light_color[5];
 			Vector3 light_front[5];
 			Vector3 light_cone[5];
 			Vector3 light_vector[5];
+			Matrix44 shadowmap_vp[5];
+			Texture* shadowmaps[5];
+			float light_shadow_bias[5];
+			int light_cast_shadows[5];
 			float light_max_distance[5];
 			int light_type[5];
 			for (int i = 0; i < num_lights; i++) {
@@ -233,6 +248,15 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
 				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
 				else light_type[i] = 2;
+				/*if (lights[i]->shadowmap) {
+					light_cast_shadows[i] = 1;
+					shadowmaps[i] = lights[i]->shadowmap;
+					shadowmap_vp[i] = lights[i]->light_camera->viewprojection_matrix;
+					light_shadow_bias[i] = lights[i]->shadow_bias;
+				}
+				else {
+					light_cast_shadows[i] = 0;
+				}*/
 			}
 			shader->setUniform3Array("u_light_position", (float*)&light_position, num_lights);
 			shader->setUniform3Array("u_light_color", (float*)&light_color, num_lights);
@@ -242,6 +266,11 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, num_lights);
 			shader->setUniform1Array("u_light_type", (int*)&light_type, num_lights);
 			shader->setUniform("u_num_lights", num_lights);
+
+			/*shader->setUniform1Array("u_light_cast_shadows", (int*)&light_cast_shadows, num_lights);
+			shader->setTexture("u_light_shadowmap", (Texture*)&shadowmaps, 4);
+			shader->setMatrix44Array("u_light_shadowmap_vp", (Matrix44*)&shadowmap_vp, num_lights);
+			shader->setUniform1Array("u_light_shadow_bias", (float*)&light_shadow_bias, num_lights);*/
 			mesh->render(GL_TRIANGLES);		
 		}
 		//Multipass
@@ -335,7 +364,8 @@ void GTR::Renderer::generateShadowMap(LightEntity* light) {
 
 		float halfsize = light->area_size / 2;
 		light_camera->setOrthographic(-halfsize, halfsize, -halfsize, halfsize, 0.1, light->max_distance);
-		light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
+		light_camera->lookAt(light->model.getTranslation(), light->model.getTranslation() + light->model.frontVector(), light->model.rotateVector(Vector3(0, 1, 0)));
+
 		light_camera->enable();
 
 		for (int i = 0; i < render_calls.size(); i++) {

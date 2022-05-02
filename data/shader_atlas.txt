@@ -126,6 +126,8 @@ uniform sampler2D u_texture_emissive;
 uniform sampler2D u_texture_normal;
 uniform sampler2D u_texture_occlusion;
 uniform vec3 u_ambient_light;
+uniform int u_have_normal_texture;
+uniform int u_have_occlusion_texture;
 
 const int MAX_LIGHTS = 5;
 uniform vec3 u_light_position[MAX_LIGHTS];
@@ -144,7 +146,7 @@ uniform float u_light_shadow_bias[MAX_LIGHTS];
 
 out vec4 FragColor;
 
-/*float testShadowMap(vec3 pos){
+/*float testShadowMap(vec3 pos, int i){
 	//project our 3D position to the shadowmap
 	vec4 proj_pos = u_light_shadowmap_vp[i] * vec4(pos,1.0);
 
@@ -155,13 +157,13 @@ out vec4 FragColor;
 	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
 
 	//get point depth [-1 .. +1] in non-linear space
-	float real_depth = (proj_pos.z - u_light_shadow_bias) / proj_pos.w;
+	float real_depth = (proj_pos.z - u_light_shadow_bias[i]) / proj_pos.w;
 
 	//normalize from [-1..+1] to [0..+1] still non-linear
 	real_depth = real_depth * 0.5 + 0.5;
 
 	//read depth from depth buffer in [0..+1] non-linear
-	float shadow_depth = texture(u_light_shadowmap, shadow_uv).x;
+	float shadow_depth = texture(u_light_shadowmap[i], shadow_uv).x;
 
 	//compute final shadow factor by comparing
 	float shadow_factor = 1.0;
@@ -210,15 +212,26 @@ void main()
 	color *= texture( u_texture, v_uv );
 
 	vec3 emissive_factor = u_emissive_factor;
-	emissive_factor *= texture(u_texture_emissive, v_uv);
+	emissive_factor *= texture(u_texture_emissive, v_uv).xyz;
 
-	vec3 normal_pixel = texture2D(u_texture_normal, v_uv).xyz;
-	vec3 N = perturbNormal(v_normal, v_world_position, v_uv, normal_pixel);
+	vec3 N;
+	if(u_have_normal_texture == 1){
+		vec3 normal_pixel = texture2D(u_texture_normal, v_uv).xyz;
+		N = normalize(perturbNormal(v_normal, v_world_position, v_uv, normal_pixel));
+	}
+	if(u_have_normal_texture == 0){
+		N = normalize(v_normal);
+	}
+
+	vec3 ambient = u_ambient_light;
+	if(u_have_occlusion_texture == 1){
+		ambient *= texture(u_texture_occlusion, v_uv).x;
+	}
 
 	if(color.a < u_alpha_cutoff)
 		discard;
 
-	vec3 light = vec3(u_ambient_light);
+	vec3 light = ambient;
 	
 	for(int i = 0; i < MAX_LIGHTS; i++) {
 		if(i < u_num_lights){
@@ -253,7 +266,7 @@ void main()
 			}
 
 			float ShadowFactor = 1.0;
-			//if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position);
+			//if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position, i);
 
 			float NdotL = clamp(dot(N, L), 0.0, 1.0);
 			light += NdotL * u_light_color[i] * att_factor * spotFactor * ShadowFactor;;
@@ -295,6 +308,8 @@ uniform vec3 u_emissive_factor;
 uniform sampler2D u_texture_emissive;
 uniform sampler2D u_texture_normal;
 uniform sampler2D u_texture_occlusion;
+uniform int u_have_normal_texture;
+uniform int u_have_occlusion_texture;
 
 uniform int u_light_cast_shadows;
 uniform sampler2D u_light_shadowmap;
@@ -380,18 +395,26 @@ void main()
 	color *= texture(u_texture, v_uv);
 
 	vec3 emissive_factor = u_emissive_factor;
-	emissive_factor *= texture(u_texture_emissive, v_uv);
+	emissive_factor *= texture(u_texture_emissive, v_uv).xyz;
 
-	vec3 normal_pixel = texture2D(u_texture_normal, v_uv).xyz;
-	vec3 N = perturbNormal(v_normal, v_world_position, v_uv, normal_pixel);
+	vec3 N;
+	if(u_have_normal_texture == 1){
+		vec3 normal_pixel = texture2D(u_texture_normal, v_uv).xyz;
+		N = normalize(perturbNormal(v_normal, v_world_position, v_uv, normal_pixel));
+	}
+	if(u_have_normal_texture == 0){
+		N = normalize(v_normal);
+	}
 	
 	vec3 ambient = u_ambient_light;
-	//ambient *= texture2D(u_texture_occlusion, v_uv).xyz;
+	if(u_have_occlusion_texture == 1){
+		ambient *= texture(u_texture_occlusion, v_uv).x;
+	}
 
 	if(color.a < u_alpha_cutoff)
 		discard;
 
-	vec3 light = vec3(ambient);
+	vec3 light = ambient;
 	
 	vec3 L;
 	float spotFactor = 1.0;
