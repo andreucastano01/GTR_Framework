@@ -106,6 +106,37 @@ void main()
 	FragColor = color;
 }
 
+\encodenormalmap
+
+mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
+{
+	// get edge vectors of the pixel triangle
+	vec3 dp1 = dFdx(p);
+	vec3 dp2 = dFdy(p);
+	vec2 duv1 = dFdx(uv);
+	vec2 duv2 = dFdy(uv);
+	
+	// solve the linear system
+	vec3 dp2perp = cross(dp2, N);
+	vec3 dp1perp = cross(N, dp1);
+	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+ 
+	// construct a scale-invariant frame 
+	float invmax = inversesqrt(max(dot(T,T), dot(B,B)));
+	return mat3(T * invmax, B * invmax, N);
+}
+
+// assume N, the interpolated vertex normal and 
+// WP the world position
+//vec3 normal_pixel = texture2D(normalmap, uv).xyz; 
+vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
+{
+	normal_pixel = normal_pixel * 255./127. - 128./127.;
+	mat3 TBN = cotangent_frame(N, WP, uv);
+	return normalize(TBN * normal_pixel);
+}
+
 \singlepass.fs
 
 #version 330 core
@@ -139,71 +170,9 @@ uniform vec3 u_light_vector[MAX_LIGHTS];
 uniform vec3 u_light_front[MAX_LIGHTS];
 uniform int u_num_lights;
 
-uniform int u_light_cast_shadows[MAX_LIGHTS];
-uniform sampler2D u_light_shadowmap[MAX_LIGHTS];
-uniform mat4 u_light_shadowmap_vp[MAX_LIGHTS];
-uniform float u_light_shadow_bias[MAX_LIGHTS];
-
 out vec4 FragColor;
 
-/*float testShadowMap(vec3 pos, int i){
-	//project our 3D position to the shadowmap
-	vec4 proj_pos = u_light_shadowmap_vp[i] * vec4(pos,1.0);
-
-	//from homogeneus space to clip space
-	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
-
-	//from clip space to uv space
-	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
-
-	//get point depth [-1 .. +1] in non-linear space
-	float real_depth = (proj_pos.z - u_light_shadow_bias[i]) / proj_pos.w;
-
-	//normalize from [-1..+1] to [0..+1] still non-linear
-	real_depth = real_depth * 0.5 + 0.5;
-
-	//read depth from depth buffer in [0..+1] non-linear
-	float shadow_depth = texture(u_light_shadowmap[i], shadow_uv).x;
-
-	//compute final shadow factor by comparing
-	float shadow_factor = 1.0;
-
-	//we can compare them, even if they are not linear
-	if( shadow_depth < real_depth )
-		shadow_factor = 0.0;
-
-	return shadow_factor;
-}*/
-
-//from this github repo
-mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
-{
-	// get edge vectors of the pixel triangle
-	vec3 dp1 = dFdx(p);
-	vec3 dp2 = dFdy(p);
-	vec2 duv1 = dFdx(uv);
-	vec2 duv2 = dFdy(uv);
-	
-	// solve the linear system
-	vec3 dp2perp = cross(dp2, N);
-	vec3 dp1perp = cross(N, dp1);
-	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
- 
-	// construct a scale-invariant frame 
-	float invmax = inversesqrt(max(dot(T,T), dot(B,B)));
-	return mat3(T * invmax, B * invmax, N);
-}
-
-// assume N, the interpolated vertex normal and 
-// WP the world position
-//vec3 normal_pixel = texture2D(normalmap, uv).xyz; 
-vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
-{
-	normal_pixel = normal_pixel * 255./127. - 128./127.;
-	mat3 TBN = cotangent_frame(N, WP, uv);
-	return normalize(TBN * normal_pixel);
-}
+#include "encodenormalmap"
 
 void main()
 {
@@ -265,11 +234,8 @@ void main()
 				att_factor = 1.0;
 			}
 
-			float ShadowFactor = 1.0;
-			//if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position, i);
-
 			float NdotL = clamp(dot(N, L), 0.0, 1.0);
-			light += NdotL * u_light_color[i] * att_factor * spotFactor * ShadowFactor;;
+			light += NdotL * u_light_color[i] * att_factor * spotFactor;
 		}
 	}
 
@@ -316,6 +282,8 @@ uniform sampler2D u_light_shadowmap;
 uniform mat4 u_light_shadowmap_vp;
 uniform float u_light_shadow_bias;
 
+#include "encodenormalmap"
+
 out vec4 FragColor;
 
 float testShadowMap(vec3 pos){
@@ -356,37 +324,6 @@ float testShadowMap(vec3 pos){
 
 	return shadow_factor;
 }
-
-//from this github repo
-mat3 cotangent_frame(vec3 N, vec3 p, vec2 uv)
-{
-	// get edge vectors of the pixel triangle
-	vec3 dp1 = dFdx(p);
-	vec3 dp2 = dFdy(p);
-	vec2 duv1 = dFdx(uv);
-	vec2 duv2 = dFdy(uv);
-	
-	// solve the linear system
-	vec3 dp2perp = cross(dp2, N);
-	vec3 dp1perp = cross(N, dp1);
-	vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-	vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
- 
-	// construct a scale-invariant frame 
-	float invmax = inversesqrt(max(dot(T,T), dot(B,B)));
-	return mat3(T * invmax, B * invmax, N);
-}
-
-// assume N, the interpolated vertex normal and 
-// WP the world position
-//vec3 normal_pixel = texture2D(normalmap, uv).xyz; 
-vec3 perturbNormal(vec3 N, vec3 WP, vec2 uv, vec3 normal_pixel)
-{
-	normal_pixel = normal_pixel * 255./127. - 128./127.;
-	mat3 TBN = cotangent_frame(N, WP, uv);
-	return normalize(TBN * normal_pixel);
-}
-
 
 void main()
 {

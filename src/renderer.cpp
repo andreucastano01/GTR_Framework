@@ -225,15 +225,11 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 			else
 				glDisable(GL_BLEND);
 
-			Vector3 light_position[5] = {};
+			Vector3 light_position[5];
 			Vector3 light_color[5];
 			Vector3 light_front[5];
 			Vector3 light_cone[5];
 			Vector3 light_vector[5];
-			Matrix44 shadowmap_vp[5];
-			Texture* shadowmaps[5];
-			float light_shadow_bias[5];
-			int light_cast_shadows[5];
 			float light_max_distance[5];
 			int light_type[5];
 			for (int i = 0; i < num_lights; i++) {
@@ -248,15 +244,6 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
 				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
 				else light_type[i] = 2;
-				/*if (lights[i]->shadowmap) {
-					light_cast_shadows[i] = 1;
-					shadowmaps[i] = lights[i]->shadowmap;
-					shadowmap_vp[i] = lights[i]->light_camera->viewprojection_matrix;
-					light_shadow_bias[i] = lights[i]->shadow_bias;
-				}
-				else {
-					light_cast_shadows[i] = 0;
-				}*/
 			}
 			shader->setUniform3Array("u_light_position", (float*)&light_position, num_lights);
 			shader->setUniform3Array("u_light_color", (float*)&light_color, num_lights);
@@ -266,11 +253,6 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 			shader->setUniform1Array("u_light_max_distance", (float*)&light_max_distance, num_lights);
 			shader->setUniform1Array("u_light_type", (int*)&light_type, num_lights);
 			shader->setUniform("u_num_lights", num_lights);
-
-			/*shader->setUniform1Array("u_light_cast_shadows", (int*)&light_cast_shadows, num_lights);
-			shader->setTexture("u_light_shadowmap", (Texture*)&shadowmaps, 4);
-			shader->setMatrix44Array("u_light_shadowmap_vp", (Matrix44*)&shadowmap_vp, num_lights);
-			shader->setUniform1Array("u_light_shadow_bias", (float*)&light_shadow_bias, num_lights);*/
 			mesh->render(GL_TRIANGLES);		
 		}
 		//Multipass
@@ -319,7 +301,7 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				mesh->render(GL_TRIANGLES);
 
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
-				shader->setUniform("u_emissive_factor", Vector3());
+				shader->setUniform("u_emissive_factor", Vector3()); //Solo queremos pintar 1 vez el factor emisivo
 			}
 		}
 	}
@@ -334,9 +316,8 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 //Generates a ShadowMap for the given light
 void GTR::Renderer::generateShadowMap(LightEntity* light) {
-	//Para hacer las sombras direccionales necesitamos una camara ortogonal en vez de perspectiva
-	if (light->light_type == GTR::eLightType::DIRECTIONAL) {
-		if (!light->cast_shadows) { 
+	if (light->light_type == GTR::eLightType::DIRECTIONAL || light->light_type == GTR::eLightType::SPOT) {
+		if (!light->cast_shadows) {
 			if (light->fbo) {
 				delete light->fbo;
 				light->fbo = NULL;
@@ -344,13 +325,11 @@ void GTR::Renderer::generateShadowMap(LightEntity* light) {
 			}
 			return;
 		}
-
 		if (!light->fbo) {
 			light->fbo = new FBO();
 			light->fbo->setDepthOnly(1024, 1024);
 			light->shadowmap = light->fbo->depth_texture;
 		}
-
 		if (!light->light_camera) light->light_camera = new Camera();
 
 		light->fbo->bind();
@@ -362,54 +341,17 @@ void GTR::Renderer::generateShadowMap(LightEntity* light) {
 		Camera* current_camera = Camera::current;
 		Camera* light_camera = light->light_camera;
 
-		float halfsize = light->area_size / 2;
-		light_camera->setOrthographic(-halfsize, halfsize, -halfsize, halfsize, 0.1, light->max_distance);
-		light_camera->lookAt(light->model.getTranslation(), light->model.getTranslation() + light->model.frontVector(), light->model.rotateVector(Vector3(0, 1, 0)));
+		if (light->light_type == GTR::eLightType::DIRECTIONAL) {
+			float halfsize = light->area_size / 2;
+			light_camera->setOrthographic(-halfsize, halfsize, -halfsize, halfsize, 0.1, light->max_distance);
+			light_camera->lookAt(light->model.getTranslation(), light->model.getTranslation() + light->model.frontVector(), light->model.rotateVector(Vector3(0, 1, 0)));
+		}
+		if (light->light_type == GTR::eLightType::SPOT) {
+			light_camera->setPerspective(light->cone_angle, 1.0, 0.1, light->max_distance);
+			light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
+		}
 
 		light_camera->enable();
-
-		for (int i = 0; i < render_calls.size(); i++) {
-			if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
-			if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
-				renderShadowMap(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, light_camera);
-		}
-
-		light->fbo->unbind();
-
-		glColorMask(true, true, true, true);
-
-		current_camera->enable();
-	}
-	else if (light->light_type == GTR::eLightType::SPOT) {
-		if (!light->cast_shadows) { 
-			if (light->fbo) {
-				delete light->fbo;
-				light->fbo = NULL;
-				light->shadowmap = NULL;
-			}
-			return;
-		}
-
-		if (!light->fbo) {
-			light->fbo = new FBO();
-			light->fbo->setDepthOnly(1024, 1024);
-			light->shadowmap = light->fbo->depth_texture;
-		}
-
-		if (!light->light_camera) light->light_camera = new Camera();
-
-		light->fbo->bind();
-
-		glColorMask(false, false, false, false);
-
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		Camera* current_camera = Camera::current;
-		Camera* light_camera = light->light_camera;
-		light_camera->setPerspective(light->cone_angle, 1.0, 0.1, light->max_distance);
-		light_camera->lookAt(light->model.getTranslation(), light->model * Vector3(0, 0, -1), light->model.rotateVector(Vector3(0, 1, 0)));
-		light_camera->enable();
-
 		for (int i = 0; i < render_calls.size(); i++) {
 			if (render_calls[i].material->alpha_mode == GTR::eAlphaMode::BLEND) continue;
 			if (light_camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
