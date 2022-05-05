@@ -30,6 +30,10 @@ namespace GTR {
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 		void showShadowMap(LightEntity* light);
 
+		//Render types
+		void renderForward(Camera* camera);
+		void renderDeferred(Camera* camera);
+
 		//renders several elements of the scene
 		void renderScene(GTR::Scene* scene, Camera* camera);
 	
