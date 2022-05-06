@@ -33,7 +33,6 @@ public:
 	//some vars
 	bool mouse_locked; //tells if the mouse is locked (blocked in the center and not visible)
 	bool render_wireframe; //in case we want to render everything in wireframe mode
-	bool multipass; //Decidir si pasamos las luces en modo multipass o singlepass
 
 	Application( int window_width, int window_height, SDL_Window* window );
 

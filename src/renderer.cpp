@@ -50,7 +50,7 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		}
 	}
 
-	//Codigo para ordenar los rendercalls
+	//Ordenar rendercalls
 	std::sort(render_calls.begin(), render_calls.end(), [](RenderCall rc1, RenderCall rc2) {
 		if(rc1.material->alpha_mode == GTR::eAlphaMode::BLEND && rc2.material->alpha_mode == GTR::eAlphaMode::BLEND) rc1.distance_to_camera > rc2.distance_to_camera;
 		return rc1.distance_to_camera < rc2.distance_to_camera;
@@ -60,7 +60,8 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		if (lights[i]->cast_shadows) generateShadowMap(lights[i]);
 	}
 
-	renderForward(camera);
+	if (scene->forward) renderForward(camera);
+	else renderDeferred(camera);
 
 	glViewport(Application::instance->window_width-256, 0, 256, 256);
 	showShadowMap(lights[0]);
@@ -78,9 +79,6 @@ void GTR::Renderer::renderDeferred(Camera* camera) {
 
 }
 
-//Para el singlepass
-//shader->setTexture("u_texture[0]", texture, 0);
-//shader->setTexture("u_texture[1]", texture, 1);
 
 void GTR::Renderer::showShadowMap(LightEntity* light) {
 	if (!light->shadowmap) return;
@@ -281,7 +279,6 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 	else {
 		if (!scene->multipass) {
 			//Singlepass
-			//No funciona la direccional, arreglar
 			if (material->alpha_mode == GTR::eAlphaMode::BLEND)
 			{
 				glEnable(GL_BLEND);
@@ -403,8 +400,10 @@ void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Mater
 	//select if render both sides of the triangles
 	if (material->two_sided)
 		glDisable(GL_CULL_FACE);
-	else
+	else {
 		glEnable(GL_CULL_FACE);
+		glFrontFace(GL_CW);
+	}
 	assert(glGetError() == GL_NO_ERROR);
 
 	//chose a shader
@@ -431,6 +430,8 @@ void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Mater
 
 	//disable shader
 	shader->disable();
+
+	glFrontFace(GL_CCW);
 }
 
 
