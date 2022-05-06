@@ -240,22 +240,22 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 
 	shader->setUniform("u_color", material->color);
 	if(texture)
-		shader->setUniform("u_texture", texture, 0);
+		shader->setUniform("u_texture", texture, 5);
 	
 	emissive_texture = material->emissive_texture.texture;
 	if (emissive_texture)
-		shader->setUniform("u_texture_emissive", emissive_texture, 1);
+		shader->setUniform("u_texture_emissive", emissive_texture, 6);
 	
 	occlusion_texture = material->metallic_roughness_texture.texture;
 	if (occlusion_texture) {
-		shader->setUniform("u_texture_occlusion", occlusion_texture, 2);
+		shader->setUniform("u_texture_occlusion", occlusion_texture, 7);
 		shader->setUniform("u_have_occlusion_texture", 1);
 	}
 	else shader->setUniform("u_have_occlusion_texture", 0);
 	
 	normal_texture = material->normal_texture.texture;
 	if (normal_texture) {
-		shader->setUniform("u_texture_normal", normal_texture, 3);
+		shader->setUniform("u_texture_normal", normal_texture, 8);
 		shader->setUniform("u_have_normal_texture", 1); //Un prefab puede no tener un normal_map
 	} else shader->setUniform("u_have_normal_texture", 0);
 
@@ -295,6 +295,9 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 			Vector3 light_front[5];
 			Vector3 light_cone[5];
 			Vector3 light_vector[5];
+			Matrix44 vp_shadowmap[5];
+			int cast_shadows[5];
+			float shadow_bias[5];
 			float light_max_distance[5];
 			int light_type[5];
 			for (int i = 0; i < num_lights; i++) {
@@ -303,13 +306,21 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				light_max_distance[i] = lights[i]->max_distance;
 				light_front[i] = lights[i]->model.rotateVector(Vector3(0, 0, -1));
 				light_cone[i] = Vector3(lights[i]->cone_angle, lights[i]->cone_exp, cos(lights[i]->cone_angle * DEG2RAD));
-
-
+				if (lights[i]->shadowmap) {
+					cast_shadows[i] = lights[i]->cast_shadows;
+					shader->setUniform("u_light_shadowmap[i]", lights[i]->shadowmap, i);
+					vp_shadowmap[i] = lights[i]->light_camera->viewprojection_matrix;
+					shadow_bias[i] = lights[i]->shadow_bias;
+				}
+				else cast_shadows[i] = 0;
 				light_vector[i] = lights[i]->model * Vector3() - lights[i]->target;
 				if (lights[i]->light_type == GTR::eLightType::DIRECTIONAL) light_type[i] = 0;
 				else if (lights[i]->light_type == GTR::eLightType::SPOT) light_type[i] = 1;
 				else light_type[i] = 2;
 			}
+			shader->setMatrix44Array("u_light_shadowmap_vp", (Matrix44*)&vp_shadowmap, num_lights);
+			shader->setUniform1Array("u_light_cast_shadows", (int*)&cast_shadows, num_lights);
+			shader->setUniform1Array("u_light_shadow_bias", (float*)&shadow_bias, num_lights);
 			shader->setUniform3Array("u_light_position", (float*)&light_position, num_lights);
 			shader->setUniform3Array("u_light_color", (float*)&light_color, num_lights);
 			shader->setUniform3Array("u_light_front", (float*)&light_front, num_lights);
@@ -353,8 +364,8 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 				else shader->setUniform("u_light_type", 2);
 
 				if (light->shadowmap) {
-					shader->setUniform("u_light_cast_shadows", 1);
-					shader->setUniform("u_light_shadowmap", light->shadowmap, 4);
+					shader->setUniform("u_light_cast_shadows", light->cast_shadows);
+					shader->setUniform("u_light_shadowmap", light->shadowmap, 0);
 					shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
 					shader->setUniform("u_light_shadow_bias", light->shadow_bias);
 				}

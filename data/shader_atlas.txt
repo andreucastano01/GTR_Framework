@@ -170,9 +170,53 @@ uniform vec3 u_light_vector[MAX_LIGHTS];
 uniform vec3 u_light_front[MAX_LIGHTS];
 uniform int u_num_lights;
 
+uniform int u_light_cast_shadows[MAX_LIGHTS];
+uniform sampler2D u_light_shadowmap[MAX_LIGHTS];
+uniform float u_light_shadow_bias[MAX_LIGHTS];
+uniform mat4 u_light_shadowmap_vp[MAX_LIGHTS];
+
 out vec4 FragColor;
 
 #include "encodenormalmap"
+
+float testShadowMap(vec3 pos, int i){
+	//project our 3D position to the shadowmap
+	vec4 proj_pos = u_light_shadowmap_vp[i] * vec4(pos,1.0);
+
+	//from homogeneus space to clip space
+	vec2 shadow_uv = proj_pos.xy / proj_pos.w;
+
+	//from clip space to uv space
+	shadow_uv = shadow_uv * 0.5 + vec2(0.5);
+
+	//get point depth [-1 .. +1] in non-linear space
+	float real_depth = (proj_pos.z - u_light_shadow_bias[i]) / proj_pos.w;
+
+	//normalize from [-1..+1] to [0..+1] still non-linear
+	real_depth = real_depth * 0.5 + 0.5;
+
+	//read depth from depth buffer in [0..+1] non-linear
+	float shadow_depth = texture(u_light_shadowmap[i], shadow_uv).x;
+
+	//compute final shadow factor by comparing
+	float shadow_factor = 1.0;
+
+	//we can compare them, even if they are not linear
+	if( shadow_depth < real_depth )
+		shadow_factor = 0.0;
+
+	if(u_light_type[i] == 0){ //Falta arreglar la directional para las sombras
+		//it is outside on the sides
+		if( shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 )
+			shadow_factor = 1.0;
+
+		//it is before near or behind far plane
+		if(real_depth < 0.0 || real_depth > 1.0)
+			shadow_factor = 1.0;
+	}
+
+	return shadow_factor;
+}
 
 void main()
 {
@@ -206,6 +250,7 @@ void main()
 		if(i < u_num_lights){
 			vec3 L;
 			float spotFactor = 1.0;
+			float ShadowFactor = 1.0;
 
 			if(u_light_type[i] == 1) { //spot light
 				L = normalize(u_light_position[i] - v_world_position);
@@ -217,6 +262,7 @@ void main()
 					} 
 					else spotFactor = 0.0; // The light will add no color to the point.
 				}
+				if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position, i);
 			}
 	
 			if(u_light_type[i] == 2) { //point light
@@ -229,13 +275,14 @@ void main()
 			att_factor = max(att_factor, 0.0);
 			att_factor *= pow(att_factor, 2.0);
 
-			if(u_light_type[i] == 0) { //directional  light
+			if(u_light_type[i] == 0) { //directional light
 				L = normalize(u_light_vector[i]);
 				att_factor = 1.0;
+				//if(u_light_cast_shadows[i] == 1) ShadowFactor = testShadowMap(v_world_position, i);
 			}
 
 			float NdotL = clamp(dot(N, L), 0.0, 1.0);
-			light += NdotL * u_light_color[i] * att_factor * spotFactor;
+			light += NdotL * u_light_color[i] * att_factor * spotFactor * ShadowFactor;
 		}
 	}
 
