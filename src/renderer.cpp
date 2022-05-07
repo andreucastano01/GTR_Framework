@@ -16,6 +16,12 @@
 
 using namespace GTR;
 
+GTR::Renderer::Renderer() {
+	pipeline = FORWARD;
+	light_render = SINGLEPASS;
+	gbuffers_fbo = NULL;
+}
+
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 {
 	//set the clear color (the background color)
@@ -60,7 +66,7 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		if (lights[i]->cast_shadows) generateShadowMap(lights[i]);
 	}
 
-	if (scene->forward) renderForward(camera);
+	if (pipeline == FORWARD) renderForward(camera);
 	else renderDeferred(camera);
 
 	glViewport(Application::instance->window_width-256, 0, 256, 256);
@@ -71,12 +77,23 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 void GTR::Renderer::renderForward(Camera* camera) {
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
-			renderMeshWithMaterial(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
+			renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 }
 
 void GTR::Renderer::renderDeferred(Camera* camera) {
+	if (!gbuffers_fbo) {
+		//create and FBO
+		gbuffers_fbo = new FBO();
 
+		//create 3 textures of 4 components
+		gbuffers_fbo->create(Application::instance->window_width, Application::instance->window_height,	3, GL_RGBA, GL_UNSIGNED_BYTE, true);
+	}
+
+	for (int i = 0; i < render_calls.size(); i++) {
+		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+			renderMeshWithMaterialtoGBuffer(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
+	}
 }
 
 
@@ -186,7 +203,7 @@ void GTR::Renderer::renderNode(const Matrix44& prefab_model, GTR::Node* node, Ca
 }
 
 //renders a mesh given its transform and material
-void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
+void GTR::Renderer::renderMeshWithMaterialandLight(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
 {
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material )
@@ -219,7 +236,7 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
     assert(glGetError() == GL_NO_ERROR);
 
 	//chose a shader
-	if (!scene->multipass)	shader = Shader::Get("singlepass");
+	if (light_render == SINGLEPASS)	shader = Shader::Get("singlepass");
 	else shader = Shader::Get("multipass");
 
     assert(glGetError() == GL_NO_ERROR);
@@ -277,7 +294,7 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 		mesh->render(GL_TRIANGLES);
 	}
 	else {
-		if (!scene->multipass) {
+		if (light_render == SINGLEPASS) {
 			//Singlepass
 			if (material->alpha_mode == GTR::eAlphaMode::BLEND)
 			{
@@ -387,11 +404,94 @@ void GTR::Renderer::renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR
 	glDepthFunc(GL_LESS);
 }
 
+void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera)
+{
+	//in case there is nothing to do
+	if (!mesh || !mesh->getNumVertices() || !material)
+		return;
+	assert(glGetError() == GL_NO_ERROR);
+
+	//define locals to simplify coding
+	Shader* shader = NULL;
+	Texture* texture = NULL;
+	Texture* emissive_texture = NULL;
+	Texture* occlusion_texture = NULL;
+	Texture* normal_texture = NULL;
+	Scene* scene = GTR::Scene::instance;
+
+	texture = material->color_texture.texture;
+	//texture = material->emissive_texture;
+	//texture = material->metallic_roughness_texture;
+	//texture = material->normal_texture;
+	//texture = material->occlusion_texture;
+	if (texture == NULL)
+		texture = Texture::getWhiteTexture(); //a 1x1 white texture
+
+	//select if render both sides of the triangles
+	if (material->two_sided)
+		glDisable(GL_CULL_FACE);
+	else
+		glEnable(GL_CULL_FACE);
+	assert(glGetError() == GL_NO_ERROR);
+
+	//chose a shader
+	shader = Shader::Get("gbuffers");
+
+	assert(glGetError() == GL_NO_ERROR);
+
+	//no shader? then nothing to render
+	if (!shader)
+		return;
+	shader->enable();
+
+	//upload uniforms
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+	float t = getTime();
+	shader->setUniform("u_time", t);
+
+	shader->setUniform("u_color", material->color);
+	if (texture)
+		shader->setUniform("u_texture", texture, 5);
+
+	emissive_texture = material->emissive_texture.texture;
+	if (emissive_texture)
+		shader->setUniform("u_texture_emissive", emissive_texture, 6);
+
+	occlusion_texture = material->metallic_roughness_texture.texture;
+	if (occlusion_texture) {
+		shader->setUniform("u_texture_occlusion", occlusion_texture, 7);
+		shader->setUniform("u_have_occlusion_texture", 1);
+	}
+	else shader->setUniform("u_have_occlusion_texture", 0);
+
+	normal_texture = material->normal_texture.texture;
+	if (normal_texture) {
+		shader->setUniform("u_texture_normal", normal_texture, 8);
+		shader->setUniform("u_have_normal_texture", 1); //Un prefab puede no tener un normal_map
+	}
+	else shader->setUniform("u_have_normal_texture", 0);
+
+	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
+	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
+	shader->setUniform("u_emissive_factor", material->emissive_factor);
+
+	//disable shader
+	shader->disable();
+
+	//set the render state as it was before to avoid problems with future renders
+	glDisable(GL_BLEND);
+	glDepthFunc(GL_LESS);
+}
+
 void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera) {
 	//in case there is nothing to do
 	if (!mesh || !mesh->getNumVertices() || !material)
 		return;
 	assert(glGetError() == GL_NO_ERROR);
+
+	if (material->alpha_mode == eAlphaMode::BLEND) return;
 
 	//define locals to simplify coding
 	Shader* shader = NULL;

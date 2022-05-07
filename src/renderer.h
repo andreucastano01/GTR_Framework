@@ -23,12 +23,28 @@ namespace GTR {
 	class Renderer
 	{
 	public:
+		enum elightrender {
+			SINGLEPASS,
+			MULTIPASS
+		};
+
+		enum epipeline {
+			FORWARD,
+			DEFERRED
+		};
+
 		//add here your functions
 		std::vector<RenderCall> render_calls;
 		std::vector<LightEntity*> lights;
+		epipeline pipeline;
+		elightrender light_render;
 		void generateShadowMap(LightEntity* light);
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 		void showShadowMap(LightEntity* light);
+
+		FBO* gbuffers_fbo;
+
+		Renderer();
 
 		//Render types
 		void renderForward(Camera* camera);
@@ -44,7 +60,8 @@ namespace GTR {
 		void renderNode(const Matrix44& model, GTR::Node* node, Camera* camera);
 
 		//to render one mesh given its material and transformation matrix
-		void renderMeshWithMaterial(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+		void renderMeshWithMaterialandLight(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
+		void renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);

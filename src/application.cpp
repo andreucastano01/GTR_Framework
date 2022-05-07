@@ -244,11 +244,11 @@ void Application::renderDebugGUI(void)
 	ImGui::Text(getGPUStats().c_str());					   // Display some text (you can use a format strings too)
 
 	ImGui::Checkbox("Wireframe", &render_wireframe);
-	ImGui::Checkbox("Multipass", &scene->multipass);
-	ImGui::Checkbox("Forward", &scene->forward);
 	ImGui::ColorEdit3("BG color", scene->background_color.v);
 	ImGui::ColorEdit3("Ambient Light", scene->ambient_light.v);
-
+	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
+	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);
+	
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
 		camera->renderInMenu();

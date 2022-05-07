@@ -55,9 +55,6 @@ bool GTR::Scene::load(const char* filename)
 	main_camera.center = readJSONVector3(json, "camera_target", main_camera.center);
 	main_camera.fov = readJSONNumber(json, "camera_fov", main_camera.fov);
 
-	multipass = false;
-	forward = false;
-
 	//entities
 	cJSON* entities_json = cJSON_GetObjectItemCaseSensitive(json, "entities");
 	cJSON* entity_json;

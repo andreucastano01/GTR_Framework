@@ -90,8 +90,6 @@ namespace GTR {
 		Vector3 background_color;
 		Vector3 ambient_light;
 		Camera main_camera;
-		bool multipass; //Decidir si pasamos las luces en modo multipass o singlepass
-		bool forward; //Decidir si renderizamos en forward o deferred
 
 		Scene();
 
