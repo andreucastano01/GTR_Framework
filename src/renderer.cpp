@@ -24,13 +24,6 @@ GTR::Renderer::Renderer() {
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 {
-	//set the clear color (the background color)
-	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
-
-	// Clear the color and the depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	checkGLErrors();
-
 	lights.clear();
 	render_calls.clear();
 
@@ -66,36 +59,74 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 		if (lights[i]->cast_shadows) generateShadowMap(lights[i]);
 	}
 
-	if (pipeline == FORWARD) renderForward(camera);
-	else renderDeferred(camera);
+	if (pipeline == FORWARD) renderForward(scene, camera);
+	else renderDeferred(scene, camera);
 
-	glViewport(Application::instance->window_width-256, 0, 256, 256);
+	/*glViewport(Application::instance->window_width - 256, 0, 256, 256);
 	showShadowMap(lights[0]);
-	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
+	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);*/
 }
 
-void GTR::Renderer::renderForward(Camera* camera) {
+void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
+	//set the clear color (the background color)
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	checkGLErrors();
+
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
 			renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 }
 
-void GTR::Renderer::renderDeferred(Camera* camera) {
+void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
+	int width = Application::instance->window_width;
+	int height = Application::instance->window_height;
+
 	if (!gbuffers_fbo) {
 		//create and FBO
 		gbuffers_fbo = new FBO();
 
 		//create 3 textures of 4 components
-		gbuffers_fbo->create(Application::instance->window_width, Application::instance->window_height,	3, GL_RGBA, GL_UNSIGNED_BYTE, true);
+		gbuffers_fbo->create(width, height,	3, GL_RGBA, GL_UNSIGNED_BYTE, true);
 	}
+
+	gbuffers_fbo->bind();
+
+	//set the clear color (the background color)
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	checkGLErrors();
 
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
 			renderMeshWithMaterialtoGBuffer(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
-}
 
+	gbuffers_fbo->unbind();
+
+	glViewport(0, height * 0.5, width * 0.5, height * 0.5);
+	gbuffers_fbo->color_textures[0]->toViewport();
+
+	glViewport(width * 0.5, height * 0.5, width * 0.5, height * 0.5);
+	gbuffers_fbo->color_textures[1]->toViewport();
+
+	glViewport(0, 0, width * 0.5, height * 0.5);
+	gbuffers_fbo->color_textures[2]->toViewport();
+
+	glViewport(width * 0.5, 0, width * 0.5, height * 0.5);
+	Shader* shader = Shader::getDefaultShader("depth");
+	shader->enable();
+	shader->setUniform("u_camera_nearfar", Vector2(camera->near_plane, camera->far_plane));
+	gbuffers_fbo->depth_texture->toViewport(shader);
+
+	glViewport(0, 0, width, height);
+
+}
 
 void GTR::Renderer::showShadowMap(LightEntity* light) {
 	if (!light->shadowmap) return;
@@ -411,6 +442,8 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 		return;
 	assert(glGetError() == GL_NO_ERROR);
 
+	if (material->alpha_mode == eAlphaMode::BLEND) return;
+
 	//define locals to simplify coding
 	Shader* shader = NULL;
 	Texture* texture = NULL;
@@ -479,10 +512,6 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 
 	//disable shader
 	shader->disable();
-
-	//set the render state as it was before to avoid problems with future renders
-	glDisable(GL_BLEND);
-	glDepthFunc(GL_LESS);
 }
 
 void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera) {
@@ -490,8 +519,6 @@ void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Mater
 	if (!mesh || !mesh->getNumVertices() || !material)
 		return;
 	assert(glGetError() == GL_NO_ERROR);
-
-	if (material->alpha_mode == eAlphaMode::BLEND) return;
 
 	//define locals to simplify coding
 	Shader* shader = NULL;

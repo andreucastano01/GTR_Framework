@@ -47,8 +47,8 @@ namespace GTR {
 		Renderer();
 
 		//Render types
-		void renderForward(Camera* camera);
-		void renderDeferred(Camera* camera);
+		void renderForward(GTR::Scene* scene, Camera* camera);
+		void renderDeferred(GTR::Scene* scene, Camera* camera);
 
 		//renders several elements of the scene
 		void renderScene(GTR::Scene* scene, Camera* camera);
