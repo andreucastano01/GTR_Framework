@@ -37,9 +37,6 @@
 *.iobj
 *.pdb
 *.ipdb
-*.tlog
-*.tlog
-*.tlog
 *.log
 *.pdb
 *.tlog
