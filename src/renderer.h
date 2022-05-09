@@ -3,6 +3,7 @@
 
 //forward declarations
 class Camera;
+class Shader;
 
 namespace GTR {
 	class Prefab;
@@ -41,6 +42,7 @@ namespace GTR {
 		void generateShadowMap(LightEntity* light);
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 		void showShadowMap(LightEntity* light);
+		void lightToShader(LightEntity* light, Shader* shader);
 		bool show_gbuffers;
 
 		FBO* gbuffers_fbo;

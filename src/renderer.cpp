@@ -64,6 +64,7 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 	if (pipeline == FORWARD) renderForward(scene, camera);
 	else renderDeferred(scene, camera);
 
+	glEnable(GL_DEPTH_TEST);
 	/*glViewport(Application::instance->window_width - 256, 0, 256, 256);
 	showShadowMap(lights[0]);
 	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);*/
@@ -121,94 +122,107 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 
 	illumination_fbo->bind();
 
+	glDisable(GL_DEPTH_TEST);
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 	Mesh* quad = Mesh::getQuad();
+	Mesh* sphere = Mesh::Get("data/meshes/sphere.obj");
 
 	Shader* shader = Shader::Get("deferred");
 	shader->enable();
 
 	//pass the gbuffers to the shader
-	shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 0);
-	shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 1);
-	shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 2);
-	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 3);
+	shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
+	shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
+	shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
+	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
 
 	//pass the inverse projection of the camera to reconstruct world pos.
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
-
-	//pass all the information about the light and ambient…
-	//...
-	//disable depth test and blend!!
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_BLEND);
+	shader->setUniform("u_ambient_light", scene->ambient_light);
 
 	//render a fullscreen quad
-	for (int i = 0; i < lights.size(); i++) {
-		if (i == 0) {
-			glDisable(GL_BLEND);
-		}
-		else {
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			glEnable(GL_BLEND);
-		}
-		LightEntity* light = lights[i];
-		shader->setUniform("u_light_color", light->color * light->intensity);
-		shader->setUniform("u_light_position", light->model * Vector3());
-		shader->setUniform("u_light_max_distance", light->max_distance);
-
-		shader->setUniform("u_light_cone", Vector3(light->cone_angle, light->cone_exp, cos(light->cone_angle * DEG2RAD)));
-		shader->setUniform("u_light_front", light->model.rotateVector(Vector3(0, 0, -1)));
-
-
-		if (light->light_type == GTR::eLightType::DIRECTIONAL) {
-			shader->setUniform("u_light_type", 0);
-			shader->setUniform("u_light_vector", light->model * Vector3() - light->target);
-		}
-		else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
-		else shader->setUniform("u_light_type", 2);
-
-		if (light->shadowmap) {
-			shader->setUniform("u_light_cast_shadows", light->cast_shadows);
-			shader->setUniform("u_light_shadowmap", light->shadowmap, 0);
-			shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
-			shader->setUniform("u_light_shadow_bias", light->shadow_bias);
-		}
-		else {
-			shader->setUniform("u_light_cast_shadows", 0);
-		}
-
-		//do the draw call that renders the mesh into the screen
+	if (!lights.size()) {
 		quad->render(GL_TRIANGLES);
-
-		shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
-		shader->setUniform("u_emissive_factor", Vector3()); //Solo queremos pintar 1 vez el factor emisivo
 	}
-	
+	else {
+		shader->setUniform("u_passed_emissive_factor", 0);
+		for (int i = 0; i < lights.size(); i++) {
+			if (i == 0) {
+				glDisable(GL_BLEND);
+			}
+			else {
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+				glEnable(GL_BLEND);
+			}
+			LightEntity* light = lights[i];
+			lightToShader(light, shader);
+
+			//do the draw call that renders the mesh into the screen
+			quad->render(GL_TRIANGLES);
+
+			shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+			shader->setUniform("u_passed_emissive_factor", 1);
+		}
+	}
+
 
 	illumination_fbo->unbind();
 
 	if (show_gbuffers) {
+		glDisable(GL_BLEND);
 		glViewport(0, height * 0.5, width * 0.5, height * 0.5);
 		gbuffers_fbo->color_textures[0]->toViewport();
-		glEnable(GL_DEPTH_TEST);
 
 		glViewport(width * 0.5, height * 0.5, width * 0.5, height * 0.5);
 		gbuffers_fbo->color_textures[1]->toViewport();
-		glEnable(GL_DEPTH_TEST);
 
 		glViewport(0, 0, width * 0.5, height * 0.5);
 		gbuffers_fbo->color_textures[2]->toViewport();
-		glEnable(GL_DEPTH_TEST);
 
 		glViewport(width * 0.5, 0, width * 0.5, height * 0.5);
 		Shader* shader = Shader::getDefaultShader("depth");
 		shader->enable();
 		shader->setUniform("u_camera_nearfar", Vector2(camera->near_plane, camera->far_plane));
 		gbuffers_fbo->depth_texture->toViewport(shader);
-		glEnable(GL_DEPTH_TEST);
+		shader->disable();
 
 		glViewport(0, 0, width, height);
+	}
+	else {
+		glDisable(GL_BLEND);
+		illumination_fbo->color_textures[0]->toViewport();
+		glEnable(GL_DEPTH_TEST);
+	}
+}
+
+void GTR::Renderer::lightToShader(LightEntity* light, Shader* shader) {
+	shader->setUniform("u_light_color", light->color * light->intensity);
+	shader->setUniform("u_light_position", light->model * Vector3());
+	shader->setUniform("u_light_max_distance", light->max_distance);
+
+	shader->setUniform("u_light_cone", Vector3(light->cone_angle, light->cone_exp, cos(light->cone_angle * DEG2RAD)));
+	shader->setUniform("u_light_front", light->model.rotateVector(Vector3(0, 0, -1)));
+
+
+	if (light->light_type == GTR::eLightType::DIRECTIONAL) {
+		shader->setUniform("u_light_type", 0);
+		shader->setUniform("u_light_vector", light->model * Vector3() - light->target);
+	}
+	else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
+	else shader->setUniform("u_light_type", 2);
+
+	if (light->shadowmap) {
+		shader->setUniform("u_light_cast_shadows", light->cast_shadows);
+		shader->setUniform("u_light_shadowmap", light->shadowmap, 0);
+		shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
+		shader->setUniform("u_light_shadow_bias", light->shadow_bias);
+	}
+	else {
+		shader->setUniform("u_light_cast_shadows", 0);
 	}
 }
 
@@ -477,30 +491,7 @@ void GTR::Renderer::renderMeshWithMaterialandLight(const Matrix44 model, Mesh* m
 					glEnable(GL_BLEND);
 				}
 				LightEntity* light = lights[i];
-				shader->setUniform("u_light_color", light->color * light->intensity);
-				shader->setUniform("u_light_position", light->model * Vector3());
-				shader->setUniform("u_light_max_distance", light->max_distance);
-
-				shader->setUniform("u_light_cone", Vector3(light->cone_angle, light->cone_exp, cos(light->cone_angle * DEG2RAD)));
-				shader->setUniform("u_light_front", light->model.rotateVector(Vector3(0, 0, -1)));
-
-
-				if (light->light_type == GTR::eLightType::DIRECTIONAL) {
-					shader->setUniform("u_light_type", 0);
-					shader->setUniform("u_light_vector", light->model * Vector3() - light->target);
-				}
-				else if (light->light_type == GTR::eLightType::SPOT) shader->setUniform("u_light_type", 1);
-				else shader->setUniform("u_light_type", 2);
-
-				if (light->shadowmap) {
-					shader->setUniform("u_light_cast_shadows", light->cast_shadows);
-					shader->setUniform("u_light_shadowmap", light->shadowmap, 0);
-					shader->setUniform("u_light_shadowmap_vp", light->light_camera->viewprojection_matrix);
-					shader->setUniform("u_light_shadow_bias", light->shadow_bias);
-				}
-				else {
-					shader->setUniform("u_light_cast_shadows", 0);
-				}
+				lightToShader(light, shader);
 
 				//do the draw call that renders the mesh into the screen
 				mesh->render(GL_TRIANGLES);
