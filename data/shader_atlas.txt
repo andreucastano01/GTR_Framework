@@ -3,6 +3,7 @@ flat basic.vs flat.fs
 texture basic.vs texture.fs
 gbuffers basic.vs gbuffers.fs
 deferred quad.vs deferred.fs
+sphere_deferred basic.vs sphere_deferred.fs
 singlepass basic.vs singlepass.fs
 multipass basic.vs multipass.fs
 depth quad.vs depth.fs
@@ -243,6 +244,104 @@ void main()
 }
 
 \deferred.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform float u_time;
+uniform float u_alpha_cutoff;
+
+uniform vec3 u_light_color;
+uniform vec3 u_light_position;
+uniform vec3 u_ambient_light;
+uniform vec3 u_light_cone;
+uniform vec3 u_light_front;
+uniform vec3 u_light_vector;
+uniform float u_light_max_distance;
+uniform int u_light_type;
+
+uniform int u_passed_emissive_factor;
+uniform sampler2D u_texture_occlusion;
+uniform int u_have_occlusion_texture;
+
+uniform sampler2D u_gb0_texture;
+uniform sampler2D u_gb1_texture;
+uniform sampler2D u_gb2_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+
+out vec4 FragColor;
+
+#include "encodeshadowmap"
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 gb0_color = texture(u_gb0_texture, v_uv);
+	vec4 gb1_color = texture(u_gb1_texture, v_uv);
+	vec4 gb2_color = texture(u_gb2_texture, v_uv);
+	vec4 color = vec4(gb0_color.xyz, 1.0);
+
+	float depth = texture( u_depth_texture, uv ).x;
+	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec3 N = normalize(gb1_color.xyz * 2.0 - vec3(1.0));
+	
+	vec3 ambient = u_ambient_light;
+	ambient *= gb0_color.a;
+
+	if(color.a < u_alpha_cutoff)
+		discard;
+
+	vec3 light = ambient;
+	
+	vec3 L;
+	float spotFactor = 1.0;
+	float ShadowFactor = 1.0;
+
+	if(u_light_type == 1) { //spot light
+		L = normalize(u_light_position - world_position);
+		if (u_light_cone.z > 0){
+			vec3 D = normalize(u_light_front);
+			float spotCosine = dot(D, -L);
+			if (spotCosine >= u_light_cone.z) {
+				spotFactor = pow(spotCosine, u_light_cone.y);
+			} 
+			else spotFactor = 0.0; // The light will add no color to the point.
+		}
+		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(world_position);
+	}
+	
+	if(u_light_type == 2) { //point light
+		L = normalize(u_light_position - world_position);
+	}
+
+	float light_distance = length(u_light_position - world_position);
+	float att_factor = u_light_max_distance - light_distance;
+	att_factor = att_factor/u_light_max_distance;
+	att_factor = max(att_factor, 0.0);
+	att_factor *= pow(att_factor, 2.0);
+
+	if(u_light_type == 0) { //directional  light
+		L = normalize(u_light_vector);
+		att_factor = 1.0;
+		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(world_position);
+	}
+
+	float NdotL = clamp(dot(N, L), 0.0, 1.0);
+	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
+
+	color.xyz *= light;
+	if(u_passed_emissive_factor == 0) color.xyz += gb2_color.xyz;
+	
+	FragColor = color;
+}
+
+\sphere_deferred.fs
 
 #version 330 core
 

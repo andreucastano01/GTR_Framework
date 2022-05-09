@@ -126,47 +126,102 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	Mesh* quad = Mesh::getQuad();
-	Mesh* sphere = Mesh::Get("data/meshes/sphere.obj");
+	bool quad = false;
+	if (quad) {
+		Mesh* quad = Mesh::getQuad();
 
-	Shader* shader = Shader::Get("deferred");
-	shader->enable();
+		Shader* shader = Shader::Get("deferred");
+		shader->enable();
 
-	//pass the gbuffers to the shader
-	shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
-	shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
-	shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
-	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
+		//pass the gbuffers to the shader
+		shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
+		shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
+		shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
+		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
 
-	//pass the inverse projection of the camera to reconstruct world pos.
-	Matrix44 inv_vp = camera->viewprojection_matrix;
-	inv_vp.inverse();
-	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_ambient_light", scene->ambient_light);
+		//pass the inverse projection of the camera to reconstruct world pos.
+		Matrix44 inv_vp = camera->viewprojection_matrix;
+		inv_vp.inverse();
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_ambient_light", scene->ambient_light);
 
-	//render a fullscreen quad
-	if (!lights.size()) {
-		quad->render(GL_TRIANGLES);
+		//render a fullscreen quad
+		if (!lights.size()) {
+			quad->render(GL_TRIANGLES);
+		}
+		else {
+			shader->setUniform("u_passed_emissive_factor", 0);
+			for (int i = 0; i < lights.size(); i++) {
+				if (i == 0) {
+					glDisable(GL_BLEND);
+				}
+				else {
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					glEnable(GL_BLEND);
+				}
+				LightEntity* light = lights[i];
+				lightToShader(light, shader);
+
+				//do the draw call that renders the mesh into the screen
+				quad->render(GL_TRIANGLES);
+
+				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+				shader->setUniform("u_passed_emissive_factor", 1);
+			}
+		}
 	}
 	else {
-		shader->setUniform("u_passed_emissive_factor", 0);
-		for (int i = 0; i < lights.size(); i++) {
-			if (i == 0) {
-				glDisable(GL_BLEND);
-			}
-			else {
-				glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-				glEnable(GL_BLEND);
-			}
-			LightEntity* light = lights[i];
-			lightToShader(light, shader);
+		Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
+		Shader* shader = Shader::Get("sphere_deferred");
+		shader->enable();
+		glFrontFace(GL_CW);
+		
+		//pass the gbuffers to the shader
+		shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
+		shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
+		shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
+		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
 
-			//do the draw call that renders the mesh into the screen
-			quad->render(GL_TRIANGLES);
+		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 
-			shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
-			shader->setUniform("u_passed_emissive_factor", 1);
+		//pass the inverse projection of the camera to reconstruct world pos.
+		Matrix44 inv_vp = camera->viewprojection_matrix;
+		inv_vp.inverse();
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_ambient_light", scene->ambient_light);
+
+		//render a fullscreen quad
+		if (!lights.size()) {
+			sphere->render(GL_TRIANGLES);
 		}
+		else {
+			shader->setUniform("u_passed_emissive_factor", 0);
+			for (int i = 0; i < lights.size(); i++) {
+				if (i == 0) {
+					glDisable(GL_BLEND);
+				}
+				else {
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+					glEnable(GL_BLEND);
+				}
+				LightEntity* light = lights[i];
+				lightToShader(light, shader);
+				Matrix44 m;
+				vec3 position = light->model * Vector3();
+				m.setTranslation(position.x, position.y, position.z);
+				//and scale it according to the max_distance of the light
+				m.scale(light->max_distance, light->max_distance, light->max_distance);
+				shader->setUniform("u_model", m);
+
+				//do the draw call that renders the mesh into the screen
+				sphere->render(GL_TRIANGLES);
+
+				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+				shader->setUniform("u_passed_emissive_factor", 1);
+			}
+		}
+
+		glFrontFace(GL_CCW);
 	}
 
 
