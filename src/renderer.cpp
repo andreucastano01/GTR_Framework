@@ -126,102 +126,59 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	bool quad = false;
-	if (quad) {
-		Mesh* quad = Mesh::getQuad();
+	//Falta arreglar luz ambiente, emisiva
+	for (int i = 0; i < lights.size(); i++) {
+		if (i == 0) {
+			glDisable(GL_BLEND);
+		}
+		else {
+			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+			glEnable(GL_BLEND);
+		}
+		LightEntity* light = lights[i];
+		if (light->light_type == GTR::eLightType::DIRECTIONAL) {
+			Mesh* quad = Mesh::getQuad();
 
-		Shader* shader = Shader::Get("deferred");
-		shader->enable();
+			Shader* shader = Shader::Get("deferred");
+			shader->enable();
 
-		//pass the gbuffers to the shader
-		shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
-		shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
-		shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
-		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
+			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
+			lightToShader(light, shader);
 
-		//pass the inverse projection of the camera to reconstruct world pos.
-		Matrix44 inv_vp = camera->viewprojection_matrix;
-		inv_vp.inverse();
-		shader->setUniform("u_inverse_viewprojection", inv_vp);
-		shader->setUniform("u_ambient_light", scene->ambient_light);
+			if (i != 0) {
+				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
+				shader->setUniform("u_passed_emissive_factor", 1);
+			}
 
-		//render a fullscreen quad
-		if (!lights.size()) {
+			//do the draw call that renders the mesh into the screen
 			quad->render(GL_TRIANGLES);
 		}
 		else {
-			shader->setUniform("u_passed_emissive_factor", 0);
-			for (int i = 0; i < lights.size(); i++) {
-				if (i == 0) {
-					glDisable(GL_BLEND);
-				}
-				else {
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-					glEnable(GL_BLEND);
-				}
-				LightEntity* light = lights[i];
-				lightToShader(light, shader);
+			Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
+			Shader* shader = Shader::Get("sphere_deferred");
+			shader->enable();
+			glFrontFace(GL_CW);
 
-				//do the draw call that renders the mesh into the screen
-				quad->render(GL_TRIANGLES);
+			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
+			shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+			lightToShader(light, shader);
+			Matrix44 m;
+			vec3 position = light->model * Vector3();
+			m.setTranslation(position.x, position.y, position.z);
+			//and scale it according to the max_distance of the light
+			m.scale(light->max_distance, light->max_distance, light->max_distance);
+			shader->setUniform("u_model", m);
 
+			if (i != 0) {
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 				shader->setUniform("u_passed_emissive_factor", 1);
 			}
-		}
-	}
-	else {
-		Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
-		Shader* shader = Shader::Get("sphere_deferred");
-		shader->enable();
-		glFrontFace(GL_CW);
-		
-		//pass the gbuffers to the shader
-		shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
-		shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
-		shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
-		shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
 
-		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
-
-		//pass the inverse projection of the camera to reconstruct world pos.
-		Matrix44 inv_vp = camera->viewprojection_matrix;
-		inv_vp.inverse();
-		shader->setUniform("u_inverse_viewprojection", inv_vp);
-		shader->setUniform("u_ambient_light", scene->ambient_light);
-
-		//render a fullscreen quad
-		if (!lights.size()) {
+			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
+
+			glFrontFace(GL_CCW);
 		}
-		else {
-			shader->setUniform("u_passed_emissive_factor", 0);
-			for (int i = 0; i < lights.size(); i++) {
-				if (i == 0) {
-					glDisable(GL_BLEND);
-				}
-				else {
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-					glEnable(GL_BLEND);
-				}
-				LightEntity* light = lights[i];
-				lightToShader(light, shader);
-				Matrix44 m;
-				vec3 position = light->model * Vector3();
-				m.setTranslation(position.x, position.y, position.z);
-				//and scale it according to the max_distance of the light
-				m.scale(light->max_distance, light->max_distance, light->max_distance);
-				shader->setUniform("u_model", m);
-
-				//do the draw call that renders the mesh into the screen
-				sphere->render(GL_TRIANGLES);
-
-				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
-				shader->setUniform("u_passed_emissive_factor", 1);
-			}
-		}
-
-		glFrontFace(GL_CCW);
 	}
 
 
@@ -252,6 +209,23 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 		illumination_fbo->color_textures[0]->toViewport();
 		glEnable(GL_DEPTH_TEST);
 	}
+}
+
+void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader){
+
+	//pass the gbuffers to the shader
+	shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
+	shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
+	shader->setUniform("u_gb2_texture", gbuffers_fbo->color_textures[2], 3);
+	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
+
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+
+	//pass the inverse projection of the camera to reconstruct world pos.
+	Matrix44 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	shader->setUniform("u_ambient_light", scene->ambient_light);
 }
 
 void GTR::Renderer::lightToShader(LightEntity* light, Shader* shader) {
@@ -572,8 +546,6 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 		return;
 	assert(glGetError() == GL_NO_ERROR);
 
-	if (material->alpha_mode == eAlphaMode::BLEND) return;
-
 	//define locals to simplify coding
 	Shader* shader = NULL;
 	Texture* texture = NULL;
@@ -606,6 +578,10 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 	if (!shader)
 		return;
 	shader->enable();
+
+
+	if (material->alpha_mode == eAlphaMode::BLEND) shader->setUniform("dither", 1);
+	else shader->setUniform("dither", 0);
 
 	//upload uniforms
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);

@@ -106,7 +106,7 @@ void Application::render(void)
 
 	//Draw the floor grid, helpful to have a reference point
 	if(render_debug)
-		drawGrid();
+		//drawGrid(); //No me gusta la grid
 
     glDisable(GL_DEPTH_TEST);
     //render anything in the gui after this

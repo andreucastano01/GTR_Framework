@@ -43,6 +43,7 @@ namespace GTR {
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 		void showShadowMap(LightEntity* light);
 		void lightToShader(LightEntity* light, Shader* shader);
+		void gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader);
 		bool show_gbuffers;
 
 		FBO* gbuffers_fbo;
