@@ -117,7 +117,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 		illumination_fbo = new FBO();
 
 		//create 3 textures of 4 components
-		illumination_fbo->create(width, height, 1, GL_RGB, GL_UNSIGNED_BYTE, true);
+		illumination_fbo->create(width, height, 1, GL_RGB, GL_FLOAT, true);
 	}
 
 	illumination_fbo->bind();
@@ -157,7 +157,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 			Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
 			Shader* shader = Shader::Get("sphere_deferred");
 			shader->enable();
-			glFrontFace(GL_CW);
 
 			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
 			shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
@@ -173,11 +172,14 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 				shader->setUniform("u_passed_emissive_factor", 1);
 			}
+			glFrontFace(GL_CW);
+			glEnable(GL_CULL_FACE);
 
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
 
 			glFrontFace(GL_CCW);
+			glDisable(GL_CULL_FACE);
 		}
 	}
 
@@ -226,6 +228,7 @@ void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera
 	inv_vp.inverse();
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
+	shader->setUniform("u_passed_emissive_factor", 0);
 }
 
 void GTR::Renderer::lightToShader(LightEntity* light, Shader* shader) {
