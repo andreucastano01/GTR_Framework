@@ -126,7 +126,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	//Falta arreglar luz ambiente, emisiva
+	//Falta arreglar luz ambiente
 	for (int i = 0; i < lights.size(); i++) {
 		if (i == 0) {
 			glDisable(GL_BLEND);
@@ -144,9 +144,9 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 
 			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
 			lightToShader(light, shader);
+			shader->setUniform("u_ambient_light", scene->ambient_light);
 
 			if (i != 0) {
-				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 				shader->setUniform("u_passed_emissive_factor", 1);
 			}
 
@@ -169,7 +169,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 			shader->setUniform("u_model", m);
 
 			if (i != 0) {
-				shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 				shader->setUniform("u_passed_emissive_factor", 1);
 			}
 			glFrontFace(GL_CW);
@@ -182,7 +181,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 			glDisable(GL_CULL_FACE);
 		}
 	}
-
 
 	illumination_fbo->unbind();
 
@@ -209,7 +207,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 	else {
 		glDisable(GL_BLEND);
 		illumination_fbo->color_textures[0]->toViewport();
-		glEnable(GL_DEPTH_TEST);
 	}
 }
 
@@ -227,7 +224,6 @@ void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_passed_emissive_factor", 0);
 }
 

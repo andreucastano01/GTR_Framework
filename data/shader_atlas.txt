@@ -327,6 +327,9 @@ void main()
 	vec4 color = vec4(gb0_color.xyz, 1.0);
 
 	float depth = texture( u_depth_texture, uv ).x;
+
+	if(depth == 1.0) discard;
+
 	vec4 screen_pos = vec4(uv.x*2.0-1.0, uv.y*2.0-1.0, depth*2.0-1.0, 1.0);
 	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
 	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
