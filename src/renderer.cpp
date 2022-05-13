@@ -84,7 +84,7 @@ void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
 	}
 }
 
-void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
+void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	int width = Application::instance->window_width;
 	int height = Application::instance->window_height;
 
@@ -122,65 +122,61 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 
 	illumination_fbo->bind();
 
+	gbuffers_fbo->depth_texture->copyTo(NULL);
+
 	glDisable(GL_DEPTH_TEST);
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	//Falta arreglar luz ambiente
+	Mesh* quad = Mesh::getQuad();
+
+	Shader* shader = Shader::Get("deferred");
+	shader->enable();
+	gbuffertoshader(gbuffers_fbo, scene, camera, shader);
+	
+	shader->setUniform("u_ambient_light", scene->ambient_light);
+	shader->setUniform("u_passed_emissive_factor", 0);
+
 	for (int i = 0; i < lights.size(); i++) {
-		if (i == 0) {
-			glDisable(GL_BLEND);
-		}
-		else {
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-			glEnable(GL_BLEND);
-		}
 		LightEntity* light = lights[i];
 		if (light->light_type == GTR::eLightType::DIRECTIONAL) {
-			Mesh* quad = Mesh::getQuad();
-
-			Shader* shader = Shader::Get("deferred");
-			shader->enable();
-
-			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
 			lightToShader(light, shader);
-			shader->setUniform("u_ambient_light", scene->ambient_light);
-
-			if (i != 0) {
-				shader->setUniform("u_passed_emissive_factor", 1);
-			}
-
-			//do the draw call that renders the mesh into the screen
-			quad->render(GL_TRIANGLES);
 		}
-		else {
-			Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
-			Shader* shader = Shader::Get("sphere_deferred");
-			shader->enable();
+	}
+	
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
 
-			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
-			shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
-			lightToShader(light, shader);
+	quad->render(GL_TRIANGLES);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	glFrontFace(GL_CW);
+	glEnable(GL_CULL_FACE);
+
+	Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
+	Shader* sp_shader = Shader::Get("sphere_deferred");
+	sp_shader->enable();
+
+	for (int i = 0; i < lights.size(); i++) {
+		LightEntity* light = lights[i];
+		if (light->light_type == GTR::eLightType::SPOT || light->light_type == GTR::eLightType::POINT) {
+			gbuffertoshader(gbuffers_fbo, scene, camera, sp_shader);
+			lightToShader(light, sp_shader);
 			Matrix44 m;
 			vec3 position = light->model * Vector3();
 			m.setTranslation(position.x, position.y, position.z);
 			//and scale it according to the max_distance of the light
 			m.scale(light->max_distance, light->max_distance, light->max_distance);
-			shader->setUniform("u_model", m);
-
-			if (i != 0) {
-				shader->setUniform("u_passed_emissive_factor", 1);
-			}
-			glFrontFace(GL_CW);
-			glEnable(GL_CULL_FACE);
-
+			sp_shader->setUniform("u_model", m);
+			sp_shader->setUniform("u_passed_emissive_factor", 1);
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
-
-			glFrontFace(GL_CCW);
-			glDisable(GL_CULL_FACE);
 		}
 	}
+
+	glFrontFace(GL_CCW);
+	glDisable(GL_CULL_FACE);
 
 	illumination_fbo->unbind();
 
@@ -210,6 +206,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera) {
 	}
 }
 
+
 void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader){
 
 	//pass the gbuffers to the shader
@@ -224,7 +221,7 @@ void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_passed_emissive_factor", 0);
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
 }
 
 void GTR::Renderer::lightToShader(LightEntity* light, Shader* shader) {

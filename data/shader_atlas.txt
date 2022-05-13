@@ -290,6 +290,7 @@ void main()
 #version 330 core
 
 in vec2 v_uv;
+uniform vec2 u_iRes;
 
 uniform sampler2D u_texture;
 uniform float u_time;
@@ -320,7 +321,7 @@ out vec4 FragColor;
 
 void main()
 {
-	vec2 uv = v_uv;
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy;
 	vec4 gb0_color = texture(u_gb0_texture, v_uv);
 	vec4 gb1_color = texture(u_gb1_texture, v_uv);
 	vec4 gb2_color = texture(u_gb2_texture, v_uv);
