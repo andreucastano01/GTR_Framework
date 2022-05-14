@@ -86,6 +86,55 @@ float testShadowMap(vec3 pos){
 	return shadow_factor;
 }
 
+\specular_formulas
+
+#define RECIPROCAL_PI 0.3183098861837697
+
+float D_GGX (const in float NoH, const in float linearRoughness) {
+	float a2 = linearRoughness * linearRoughness;
+	float f = (NoH * NoH) * (a2 - 1.0) + 1.0;
+	return a2 / (3.1415926535 * f * f);
+}
+
+float F_Schlick1( const in float VoH, const in float f0) {
+	float f = pow(1.0 - VoH, 5.0);
+	return f0 + (1.0 - f0) * f;
+}
+
+vec3 F_Schlick3(const in float VoH, const in vec3 f0) {
+	float f = pow(1.0 - VoH, 5.0);
+	return f0 + (vec3(1.0) - f0) * f;
+}
+
+float GGX(float NdotV, float k) {
+	return NdotV / (NdotV * (1.0 - k) + k);
+}
+	
+float G_Smith(float NdotV, float NdotL, float roughness) {
+	float k = pow(roughness + 1.0, 2.0) / 8.0;
+	return GGX(NdotL, k) * GGX(NdotV, k);
+}
+
+vec3 specularBRDF( float roughness, vec3 f0, float NoH, float NoV, float NoL, float LoH ) {
+	float a = roughness * roughness;
+
+	// Normal Distribution Function
+	float D = D_GGX(NoH, a);
+
+	// Fresnel Function
+	vec3 F = F_Schlick3(LoH, f0);
+
+	// Visibility Function (shadowing/masking)
+	float G = G_Smith(NoV, NoL, roughness);
+		
+	// Norm factor
+	vec3 spec = D * G * F;
+	spec /= (4.0 * NoL * NoV + 1e-6);
+
+	return spec;
+}
+
+
 \basic.vs
 
 #version 330 core
@@ -304,6 +353,7 @@ uniform vec3 u_light_front;
 uniform vec3 u_light_vector;
 uniform float u_light_max_distance;
 uniform int u_light_type;
+uniform vec3 u_camera_position;
 
 uniform int u_passed_emissive_factor;
 uniform sampler2D u_texture_occlusion;
@@ -318,6 +368,7 @@ uniform mat4 u_inverse_viewprojection;
 out vec4 FragColor;
 
 #include "encodeshadowmap"
+#include "specular_formulas"
 
 void main()
 {
@@ -378,9 +429,28 @@ void main()
 		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(world_position);
 	}
 
-	float NdotL = clamp(dot(N, L), 0.0, 1.0);
-	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
+	vec3 V = normalize(u_camera_position - world_position);
+	vec3 H = normalize(L + V);
 
+	float NdotH = clamp(dot(N, H), 0.0, 1.0);
+	float NdotV = clamp(dot(N, V), 0.0, 1.0);
+	float NdotL = clamp(dot(N, L), 0.0, 1.0);
+	float LdotH = clamp(dot(L, H), 0.0, 1.0);
+
+	vec3 fresnel = mix(vec3(0.5), gb0_color.xyz, gb1_color.z);
+	vec3 diffuseColor = (1.0 - gb1_color.z) * gb0_color.xyz;
+
+	vec3 Fr_d = specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	// Here we use the Burley, but you can replace it by the Lambert.
+	// linearRoughness = squared roughness
+	vec3 Fd_d = diffuseColor * specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	vec3 direct = Fr_d + Fd_d;
+
+	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;
+
+	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
 	color.xyz *= light;
 	if(u_passed_emissive_factor == 0) color.xyz += gb2_color.xyz;
 	
@@ -406,6 +476,7 @@ uniform vec3 u_light_front;
 uniform vec3 u_light_vector;
 uniform float u_light_max_distance;
 uniform int u_light_type;
+uniform vec3 u_camera_position;
 
 uniform int u_passed_emissive_factor;
 uniform sampler2D u_texture_occlusion;
@@ -420,6 +491,7 @@ uniform mat4 u_inverse_viewprojection;
 out vec4 FragColor;
 
 #include "encodeshadowmap"
+#include "specular_formulas"
 
 void main()
 {
@@ -477,7 +549,27 @@ void main()
 		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(world_position);
 	}
 
+	vec3 V = normalize(u_camera_position - world_position);
+	vec3 H = normalize(L + V);
+
+	float NdotH = clamp(dot(N, H), 0.0, 1.0);
+	float NdotV = clamp(dot(N, V), 0.0, 1.0);
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
+	float LdotH = clamp(dot(L, H), 0.0, 1.0);
+
+	vec3 fresnel = mix(vec3(0.5), gb0_color.xyz, gb1_color.z);
+	vec3 diffuseColor = (1.0 - gb1_color.z) * gb0_color.xyz;
+
+	vec3 Fr_d = specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	// Here we use the Burley, but you can replace it by the Lambert.
+	// linearRoughness = squared roughness
+	vec3 Fd_d = diffuseColor * specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	vec3 direct = Fr_d + Fd_d;
+
+	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;
+
 	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
 
 	color.xyz *= light;
@@ -664,6 +756,7 @@ uniform vec3 u_light_front;
 uniform vec3 u_light_vector;
 uniform float u_light_max_distance;
 uniform int u_light_type;
+uniform vec3 u_camera_position;
 
 uniform vec3 u_emissive_factor;
 uniform sampler2D u_texture_emissive;
@@ -674,6 +767,7 @@ uniform int u_have_occlusion_texture;
 
 #include "encodenormalmap"
 #include "encodeshadowmap"
+#include "specular_formulas"
 
 out vec4 FragColor;
 
@@ -696,8 +790,12 @@ void main()
 	}
 	
 	vec3 ambient = u_ambient_light;
+	float metalness;
+	float roughness;
 	if(u_have_occlusion_texture == 1){
 		ambient *= texture(u_texture_occlusion, v_uv).x;
+		metalness = texture(u_texture_occlusion, v_uv).y;
+		roughness = texture(u_texture_occlusion, v_uv).z;
 	}
 
 	if(color.a < u_alpha_cutoff)
@@ -738,8 +836,28 @@ void main()
 		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(v_world_position);
 	}
 
+	vec3 V = normalize(u_camera_position - v_world_position);
+	vec3 H = normalize(L + V);
+
+	float NdotH = clamp(dot(N, H), 0.0, 1.0);
+	float NdotV = clamp(dot(N, V), 0.0, 1.0);
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
-	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
+	float LdotH = clamp(dot(L, H), 0.0, 1.0);
+
+	vec3 fresnel = mix(vec3(0.5), color.xyz, metalness);
+	vec3 diffuseColor = (1.0 - metalness) * color.xyz;
+
+	vec3 Fr_d = specularBRDF(roughness, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	// Here we use the Burley, but you can replace it by the Lambert.
+	// linearRoughness = squared roughness
+	vec3 Fd_d = diffuseColor * specularBRDF(roughness, fresnel, NdotH, NdotV, NdotL, LdotH);
+
+	vec3 direct = Fr_d + Fd_d;
+
+	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;
+
+	light += direct * lightParams; //Se van las luces cuando añado la directa
 
 	color.xyz *= light;
 	color.xyz += emissive_factor;

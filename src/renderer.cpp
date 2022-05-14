@@ -136,6 +136,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	
 	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_passed_emissive_factor", 0);
+	shader->setUniform("u_camera_position", camera->eye);
 
 	for (int i = 0; i < lights.size(); i++) {
 		LightEntity* light = lights[i];
@@ -170,6 +171,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			m.scale(light->max_distance, light->max_distance, light->max_distance);
 			sp_shader->setUniform("u_model", m);
 			sp_shader->setUniform("u_passed_emissive_factor", 1);
+			sp_shader->setUniform("u_camera_position", camera->eye);
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
 		}
@@ -404,6 +406,7 @@ void GTR::Renderer::renderMeshWithMaterialandLight(const Matrix44 model, Mesh* m
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 	shader->setUniform("u_camera_position", camera->eye);
 	shader->setUniform("u_model", model );
+	shader->setUniform("u_camera_position", camera->eye);
 	float t = getTime();
 	shader->setUniform("u_time", t );
 
