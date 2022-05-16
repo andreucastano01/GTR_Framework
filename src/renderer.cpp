@@ -123,6 +123,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	illumination_fbo->bind();
 
 	gbuffers_fbo->depth_texture->copyTo(NULL);
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glDisable(GL_DEPTH_TEST);
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
@@ -169,7 +170,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			//and scale it according to the max_distance of the light
 			m.scale(light->max_distance, light->max_distance, light->max_distance);
 			sp_shader->setUniform("u_model", m);
-			sp_shader->setUniform("u_passed_emissive_factor", 1);
 			sp_shader->setUniform("u_camera_position", camera->eye);
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
@@ -203,6 +203,9 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	}
 	else {
 		glDisable(GL_BLEND);
+		Shader* gshader = Shader::Get("gamma");
+		gshader->enable();
+		gshader->setUniform("u_texture", illumination_fbo->color_textures[0], 1);
 		illumination_fbo->color_textures[0]->toViewport();
 	}
 }
@@ -579,7 +582,6 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 		return;
 	shader->enable();
 
-
 	if (material->alpha_mode == eAlphaMode::BLEND) shader->setUniform("dither", 1);
 	else shader->setUniform("dither", 0);
 
@@ -615,6 +617,8 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
 	shader->setUniform("u_emissive_factor", material->emissive_factor);
+	shader->setUniform("u_roughness_factor", material->roughness_factor);
+	shader->setUniform("u_metallic_factor", material->metallic_factor);
 
 	mesh->render(GL_TRIANGLES);
 
