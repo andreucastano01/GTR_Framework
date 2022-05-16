@@ -135,7 +135,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	gbuffertoshader(gbuffers_fbo, scene, camera, shader);
 	
 	shader->setUniform("u_ambient_light", scene->ambient_light);
-	shader->setUniform("u_passed_emissive_factor", 0);
 	shader->setUniform("u_camera_position", camera->eye);
 
 	for (int i = 0; i < lights.size(); i++) {
