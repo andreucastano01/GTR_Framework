@@ -435,6 +435,8 @@ void GTR::Renderer::renderMeshWithMaterialandLight(const Matrix44 model, Mesh* m
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_emissive_factor", material->emissive_factor);
+	shader->setUniform("u_roughness_factor", material->roughness_factor);
+	shader->setUniform("u_metallic_factor", material->metallic_factor);
 
 	glDepthFunc(GL_LEQUAL);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE);

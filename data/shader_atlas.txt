@@ -90,18 +90,18 @@ float testShadowMap(vec3 pos){
 
 #define RECIPROCAL_PI 0.3183098861837697
 
-float D_GGX (const in float NoH, const in float linearRoughness) {
+float D_GGX (float NoH, float linearRoughness) {
 	float a2 = linearRoughness * linearRoughness;
 	float f = (NoH * NoH) * (a2 - 1.0) + 1.0;
 	return a2 / (3.1415926535 * f * f);
 }
 
-float F_Schlick1( const in float VoH, const in float f0) {
+float F_Schlick1(float VoH, float f0, float f90) {
 	float f = pow(1.0 - VoH, 5.0);
-	return f0 + (1.0 - f0) * f;
+    return f0 + (f90 - f0) * f;
 }
 
-vec3 F_Schlick3(const in float VoH, const in vec3 f0) {
+vec3 F_Schlick3(float VoH, vec3 f0) {
 	float f = pow(1.0 - VoH, 5.0);
 	return f0 + (vec3(1.0) - f0) * f;
 }
@@ -115,7 +115,7 @@ float G_Smith(float NdotV, float NdotL, float roughness) {
 	return GGX(NdotL, k) * GGX(NdotV, k);
 }
 
-vec3 specularBRDF( float roughness, vec3 f0, float NoH, float NoV, float NoL, float LoH ) {
+vec3 specularBRDF(float roughness, vec3 f0, float NoH, float NoV, float NoL, float LoH) {
 	float a = roughness * roughness;
 
 	// Normal Distribution Function
@@ -132,6 +132,14 @@ vec3 specularBRDF( float roughness, vec3 f0, float NoH, float NoV, float NoL, fl
 	spec /= (4.0 * NoL * NoV + 1e-6);
 
 	return spec;
+}
+
+//Esto no funciona con el F_Shlick1 de las slides, sacado del enlace de la slide de FD_Burley
+float Fd_Burley (float NoV, float NoL, float LoH, float linearRoughness) {
+        float f90 = 0.5 + 2.0 * linearRoughness * LoH * LoH;
+        float lightScatter = F_Schlick1(NoL, 1.0, f90);
+        float viewScatter  = F_Schlick1(NoV, 1.0, f90);
+        return lightScatter * viewScatter * RECIPROCAL_PI;
 }
 
 
@@ -437,20 +445,20 @@ void main()
 	float NdotL = clamp(dot(N, L), 0.0, 1.0);
 	float LdotH = clamp(dot(L, H), 0.0, 1.0);
 
-	vec3 fresnel = mix(vec3(0.5), gb0_color.xyz, gb1_color.z);
-	vec3 diffuseColor = (1.0 - gb1_color.z) * gb0_color.xyz;
+	vec3 fresnel = mix(vec3(0.5), color.xyz, gb1_color.a);
+	vec3 diffuseColor = (1.0 - gb1_color.a) * color.xyz;
 
-	vec3 Fr_d = specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+	vec3 Fr_d = specularBRDF(gb2_color.a, fresnel, NdotH, NdotV, NdotL, LdotH);
 
 	// Here we use the Burley, but you can replace it by the Lambert.
 	// linearRoughness = squared roughness
-	vec3 Fd_d = diffuseColor * specularBRDF(gb2_color.z, fresnel, NdotH, NdotV, NdotL, LdotH);
+	vec3 Fd_d = diffuseColor * Fd_Burley(NdotV, NdotL, LdotH, pow(gb2_color.a, 2.0)); 
 
 	vec3 direct = Fr_d + Fd_d;
 
 	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;
 
-	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
+	light = direct * lightParams;
 	color.xyz *= light;
 	if(u_passed_emissive_factor == 0) color.xyz += gb2_color.xyz;
 	
@@ -549,7 +557,9 @@ void main()
 		if(u_light_cast_shadows == 1) ShadowFactor = testShadowMap(world_position);
 	}
 
-	vec3 V = normalize(u_camera_position - world_position);
+	float NdotL = clamp(dot(N, L), 0.0, 1.0);
+	//La specular con esferas no se hace
+	/*vec3 V = normalize(u_camera_position - world_position);
 	vec3 H = normalize(L + V);
 
 	float NdotH = clamp(dot(N, H), 0.0, 1.0);
@@ -568,7 +578,7 @@ void main()
 
 	vec3 direct = Fr_d + Fd_d;
 
-	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;
+	vec3 lightParams = u_light_color * att_factor * spotFactor * ShadowFactor;*/
 
 	light += NdotL * u_light_color * att_factor * spotFactor * ShadowFactor;
 
@@ -764,6 +774,8 @@ uniform sampler2D u_texture_normal;
 uniform sampler2D u_texture_occlusion;
 uniform int u_have_normal_texture;
 uniform int u_have_occlusion_texture;
+uniform float u_roughness_factor;
+uniform float u_metallic_factor;
 
 #include "encodenormalmap"
 #include "encodeshadowmap"
@@ -795,7 +807,9 @@ void main()
 	if(u_have_occlusion_texture == 1){
 		ambient *= texture(u_texture_occlusion, v_uv).x;
 		metalness = texture(u_texture_occlusion, v_uv).y;
+		metalness *= u_metallic_factor;
 		roughness = texture(u_texture_occlusion, v_uv).z;
+		roughness *= u_roughness_factor;
 	}
 
 	if(color.a < u_alpha_cutoff)
@@ -851,7 +865,7 @@ void main()
 
 	// Here we use the Burley, but you can replace it by the Lambert.
 	// linearRoughness = squared roughness
-	vec3 Fd_d = diffuseColor * specularBRDF(roughness, fresnel, NdotH, NdotV, NdotL, LdotH);
+	vec3 Fd_d = diffuseColor * Fd_Burley(NdotV, NdotL, LdotH, pow(roughness, 2.0)); 
 
 	vec3 direct = Fr_d + Fd_d;
 
