@@ -17,8 +17,8 @@
 using namespace GTR;
 
 GTR::Renderer::Renderer() {
-	pipeline = FORWARD;
-	light_render = SINGLEPASS;
+	pipeline = DEFERRED;
+	light_render = MULTIPASS;
 	gbuffers_fbo = NULL;
 	illumination_fbo = NULL;
 	show_gbuffers = false;
@@ -156,21 +156,21 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	glEnable(GL_CULL_FACE);
 
 	Mesh* sphere = Mesh::Get("data/meshes/sphere.obj", false, false);
-	Shader* sp_shader = Shader::Get("sphere_deferred");
-	sp_shader->enable();
+	shader = Shader::Get("sphere_deferred");
+	shader->enable();
 
 	for (int i = 0; i < lights.size(); i++) {
 		LightEntity* light = lights[i];
 		if (light->light_type == GTR::eLightType::SPOT || light->light_type == GTR::eLightType::POINT) {
-			gbuffertoshader(gbuffers_fbo, scene, camera, sp_shader);
-			lightToShader(light, sp_shader);
+			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
+			lightToShader(light, shader);
 			Matrix44 m;
 			vec3 position = light->model * Vector3();
 			m.setTranslation(position.x, position.y, position.z);
 			//and scale it according to the max_distance of the light
 			m.scale(light->max_distance, light->max_distance, light->max_distance);
-			sp_shader->setUniform("u_model", m);
-			sp_shader->setUniform("u_camera_position", camera->eye);
+			shader->setUniform("u_model", m);
+			shader->setUniform("u_camera_position", camera->eye);
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
 		}
@@ -178,6 +178,13 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	glFrontFace(GL_CCW);
 	glDisable(GL_CULL_FACE);
+
+	glEnable(GL_DEPTH_TEST);
+	for (int i = 0; i < render_calls.size(); i++) {
+		if (render_calls[i].material->alpha_mode == eAlphaMode::BLEND)
+			if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
+				renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
+	}
 
 	illumination_fbo->unbind();
 
@@ -203,9 +210,9 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	}
 	else {
 		glDisable(GL_BLEND);
-		Shader* gshader = Shader::Get("gamma");
-		gshader->enable();
-		gshader->setUniform("u_texture", illumination_fbo->color_textures[0], 1);
+		shader = Shader::Get("gamma");
+		shader->enable();
+		shader->setUniform("u_texture", illumination_fbo->color_textures[0], 1);
 		illumination_fbo->color_textures[0]->toViewport();
 	}
 }
@@ -549,6 +556,8 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 		return;
 	assert(glGetError() == GL_NO_ERROR);
 
+	if (material->alpha_mode == eAlphaMode::BLEND) return;
+
 	//define locals to simplify coding
 	Shader* shader = NULL;
 	Texture* texture = NULL;
@@ -581,9 +590,6 @@ void GTR::Renderer::renderMeshWithMaterialtoGBuffer(const Matrix44 model, Mesh* 
 	if (!shader)
 		return;
 	shader->enable();
-
-	if (material->alpha_mode == eAlphaMode::BLEND) shader->setUniform("dither", 1);
-	else shader->setUniform("dither", 0);
 
 	//upload uniforms
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
