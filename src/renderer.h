@@ -45,9 +45,15 @@ namespace GTR {
 		void lightToShader(LightEntity* light, Shader* shader);
 		void gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader);
 		bool show_gbuffers;
+		bool show_ssao;
+		bool ssaoplus;
 
 		FBO* gbuffers_fbo;
 		FBO* illumination_fbo;
+		FBO* ssao_fbo;
+		Texture* ssao_blur;
+
+		std::vector<Vector3> random_points;
 
 		Renderer();
 
@@ -70,4 +76,6 @@ namespace GTR {
 	};
 
 	Texture* CubemapFromHDRE(const char* filename);
+
+	std::vector<Vector3> generateSpherePoints(int num, float radius, bool hemi);
 };

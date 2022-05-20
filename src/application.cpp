@@ -248,7 +248,9 @@ void Application::renderDebugGUI(void)
 	ImGui::ColorEdit3("Ambient Light", scene->ambient_light.v);
 	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
 	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);
+	ImGui::Checkbox("ssao+", &renderer->ssaoplus);
 	ImGui::Checkbox("Show Gbuffers", &renderer->show_gbuffers);
+	ImGui::Checkbox("Show ssao", &renderer->show_ssao);
 	
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
