@@ -12,6 +12,7 @@ ssao quad.vs ssao.fs
 ssaoplus quad.vs ssaoplus.fs
 ssao_blur quad.vs ssao_blur.fs
 multi basic.vs multi.fs
+tonemapper basic.vs tonemapper.fs
 
 \encodenormalmap
 
@@ -146,6 +147,17 @@ float Fd_Burley (float NoV, float NoL, float LoH, float linearRoughness) {
         return lightScatter * viewScatter * RECIPROCAL_PI;
 }
 
+\linear
+
+vec3 degamma(vec3 c)
+{
+	return pow(c,vec3(2.2));
+}
+
+vec3 gamma(vec3 c)
+{
+	return pow(c,vec3(1.0/2.2));
+}
 
 \basic.vs
 
@@ -295,11 +307,7 @@ layout(location = 1) out vec4 GB1;
 layout(location = 2) out vec4 GB2;
 
 #include "encodenormalmap"
-
-vec3 gamma(vec3 c)
-{
-	return pow(c,vec3(1.0/2.2));
-}
+#include "linear"
 
 void main()
 {
@@ -328,8 +336,8 @@ void main()
 	vec3 emissive_factor = u_emissive_factor;
 	emissive_factor *= texture(u_texture_emissive, v_uv).xyz;
 
-	vec3 gamma_color = gamma(color.xyz);
-	GB0 = vec4(color.xyz, material.x);
+	vec3 linear_color = degamma(color.xyz);
+	GB0 = vec4(linear_color, material.x);
 	GB1 = vec4(N * 0.5 + vec3(0.5), material.y);
 	GB2 = vec4(emissive_factor, material.z);
 }
@@ -1085,4 +1093,41 @@ void main()
 
 	//calcule the position of the vertex using the matrices
 	gl_Position = u_viewprojection * vec4( v_world_position, 1.0 );
+}
+
+\tonemapper.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform float u_average_lum; //1.0 por ejemplo
+uniform float u_lumwhite2; //intluz * intluz
+uniform float u_scale; //1.0 por ejemplo 
+
+#include "linear"
+
+vec3 RGB2xyY (vec3 rgb) {
+	const mat3 RGB2XYZ = mat3(0.4124, 0.3576, 0.1805,
+							   0.2126, 0.7152, 0.0722,
+							   0.0193, 0.1192, 0.9505);
+	vec3 XYZ = RGB2XYZ * rgb;
+	float f = (XYZ.x + XYZ.y + XYZ.z);
+
+	return vec3(XYZ.x / f, XYZ.y / f, XYZ.y);
+}
+
+void main() {
+	vec4 color = texture2D( u_texture, v_uv );
+	vec3 rgb = color.xyz;
+
+	float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+	float L = (u_scale / u_average_lum) * lum;
+	float Ld = (L * (1.0 + L / u_lumwhite2)) / (1.0 + L);
+
+	rgb = (rgb / lum) * Ld;
+	rgb = max(rgb,vec3(0.001));
+	rgb = gamma(rgb);
+	gl_FragColor = vec4(rgb, color.a);
 }

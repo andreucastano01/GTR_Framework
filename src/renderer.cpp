@@ -241,6 +241,16 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 				renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 
+	//Esta bien hecho? (NO)
+	float algo = 1.0;
+	shader = Shader::Get("tonemapper");
+	shader->enable();
+	shader->setUniform("u_texture", illumination_fbo->color_textures[0]);
+	shader->setUniform("u_average_lum", algo);
+	shader->setUniform("u_lumwhite2", algo);
+	shader->setUniform("u_scale", algo);
+	quad->render(GL_TRIANGLES);
+
 	illumination_fbo->unbind();
 
 	glDisable(GL_BLEND);
