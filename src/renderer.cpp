@@ -134,6 +134,15 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		ssao_blur->create(width, height);
 	}
 
+	gbuffers_fbo->depth_texture->bind();
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	//enable bilinear filtering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	gbuffers_fbo->depth_texture->unbind();
+
 	ssao_fbo->bind();
 
 	Shader* shader = NULL;
@@ -242,14 +251,13 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	}
 
 	//Esta bien hecho? (NO)
-	float algo = 1.0;
+	float algo = 3.0;
 	shader = Shader::Get("tonemapper");
 	shader->enable();
 	shader->setUniform("u_texture", illumination_fbo->color_textures[0]);
 	shader->setUniform("u_average_lum", algo);
-	shader->setUniform("u_lumwhite2", algo);
+	shader->setUniform("u_lumwhite2", algo * algo);
 	shader->setUniform("u_scale", algo);
-	quad->render(GL_TRIANGLES);
 
 	illumination_fbo->unbind();
 
@@ -285,7 +293,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 std::vector<Vector3> GTR::generateSpherePoints(int num, float radius, bool hemi) {
 	std::vector<Vector3> points;
 	points.resize(num);
-	for (int i = 0; i < num; i += 3)
+	for (int i = 0; i < num; i += 1)
 	{
 		Vector3& p = points[i];
 		float u = random();
