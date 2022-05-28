@@ -27,7 +27,8 @@ GTR::Renderer::Renderer() {
 	ssaoplus = false;
 	ssao_blur = NULL;
 
-	random_points = generateSpherePoints(64, 1, false);
+	ssao_random_points = generateSpherePoints(128, 1, false);
+	ssaoplus_random_points = generateSpherePoints(128, 1, true);
 }
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
@@ -151,17 +152,18 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	if (ssaoplus) {
 		shader = Shader::Get("ssaoplus");
 		shader->enable();
+		shader->setUniform3Array("u_points", (float*)&ssaoplus_random_points[0], ssaoplus_random_points.size());
 	}
 	else {
 		shader = Shader::Get("ssao");
 		shader->enable();
 		shader->setUniform("u_gb1_texture", gbuffers_fbo->color_textures[1], 2);
+		shader->setUniform3Array("u_points", (float*)&ssao_random_points[0], ssao_random_points.size());
 	}
 	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
 	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
 	shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
-	shader->setUniform3Array("u_points", (float*)&random_points[0], random_points.size());
 
 	quad->render(GL_TRIANGLES);
 
@@ -258,6 +260,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	shader->setUniform("u_average_lum", algo);
 	shader->setUniform("u_lumwhite2", algo * algo);
 	shader->setUniform("u_scale", algo);
+	quad->render(GL_TRIANGLES);
 
 	illumination_fbo->unbind();
 

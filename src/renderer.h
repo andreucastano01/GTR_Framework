@@ -53,7 +53,8 @@ namespace GTR {
 		FBO* ssao_fbo;
 		Texture* ssao_blur;
 
-		std::vector<Vector3> random_points;
+		std::vector<Vector3> ssao_random_points;
+		std::vector<Vector3> ssaoplus_random_points;
 
 		Renderer();
 
