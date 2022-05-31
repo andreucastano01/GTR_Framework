@@ -1,16 +1,37 @@
 {
-	"background_color":[0.01,0.01,0.1],
-	"ambient_light":[0.1,0.1,0.2],
-	"environment":"night.hdre",
-	"camera_position":[-300,90,-150],
-	"camera_target":[0,40,0],
-	"camera_fov":60,
+	"background_color": [ 0.01, 0.01, 0.1 ],
+	"ambient_light": [ 0.18, 0.16, 0.2 ],
+	"camera_position": [ -300, 90, -150 ],
+	"camera_target": [ 0, 40, 0 ],
+	"camera_fov": 60,
 	"entities": [
 		{
 			"name": "floor",
 			"type": "PREFAB",
-			"filename": "prefabs/floor.glb",
-			"position": [ 0, 1, 0 ]
+			"filename": "prefabs/road/road.gltf",
+			"position": [ 0, 0, 0 ],
+			"scale": [ 10, 10, 10 ]
+		},
+		{
+			"name": "floor2",
+			"type": "PREFAB",
+			"filename": "prefabs/road/road.gltf",
+			"position": [ 0, 0, 300 ],
+			"scale": [ 10, 10, 10 ]
+		},
+		{
+			"name": "floor3",
+			"type": "PREFAB",
+			"filename": "prefabs/road/road.gltf",
+			"position": [ 0, 0, -300 ],
+			"scale": [ 10, 10, 10 ]
+		},
+		{
+			"name": "decal",
+			"type": "DECAL",
+			"albedo": "textures/graffiti.png",
+			"position": [ 0, 0, 0 ],
+			"scale": [ 2, 1, 1 ]
 		},
 		{
 			"name": "car1",
@@ -30,46 +51,38 @@
 			"name": "house",
 			"type": "PREFAB",
 			"filename": "prefabs/house_test/scene.gltf",
-			"position": [ 300, 0, 200 ],
+			"position": [ 300, 20, 200 ],
 			"scale": [ 0.4, 0.4, 0.4 ]
+		},
+		{
+			"name": "sign",
+			"type": "PREFAB",
+			"filename": "prefabs/sign.glb",
+			"position": [ 118, 48, -400 ],
+			"angle": 120,
+			"scale": [ 60, 60, 60 ]
 		},
 		{
 			"name": "house",
 			"type": "PREFAB",
 			"filename": "prefabs/house_test/scene.gltf",
-			"position": [ 300, 0, -200 ],
+			"position": [ 300, 20, -200 ],
 			"scale": [ 0.4, 0.4, 0.4 ]
 		},
 		{
 			"name": "trash",
 			"type": "PREFAB",
 			"filename": "prefabs/trash_can/scene.gltf",
-			"position": [ 140, 0, 110 ],
+			"position": [ 140, 20, 110 ],
 			"scale": [ 0.5, 0.5, 0.5 ]
 		},
 		{
 			"name": "tree",
 			"type": "PREFAB",
 			"filename": "prefabs/tree/scene.gltf",
-			"position": [ 102, 0, -401 ],
-			"angle": -90,
-			"scale": [ 0.8, 0.8, 0.8 ]
-		},
-		{
-			"name": "tree2",
-			"type": "PREFAB",
-			"filename": "prefabs/tree/scene.gltf",
 			"position": [ 102, 0, 401 ],
 			"angle": -90,
 			"scale": [ 0.8, 0.8, 0.8 ]
-		},
-		{
-			"name": "dog",
-			"type": "PREFAB",
-			"filename": "prefabs/dog/scene.gltf",
-			"position": [ -40, 104, -401 ],
-			"angle": -90,
-			"scale": [ 60, 60, 60 ]
 		},
 		{
 			"name": "spot",
@@ -79,11 +92,11 @@
 			"color": [ 1, 0.9, 0.8 ],
 			"intensity": 10,
 			"max_dist": 1000,
-			"cone_angle": 20,
-			"cone_exp": 20,
+			"cone_angle": 45,
+			"cone_exp": 60,
 			"light_type": "SPOT",
 			"cast_shadows": true,
-			"shadow_bias": 0.01
+			"shadow_bias": 0.001
 		},
 		{
 			"name": "pointlight",

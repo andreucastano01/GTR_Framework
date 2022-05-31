@@ -47,11 +47,14 @@ namespace GTR {
 		bool show_gbuffers;
 		bool show_ssao;
 		bool ssaoplus;
+		float average_lum;
+		float lum_white;
+		float lum_scale;
 
 		FBO* gbuffers_fbo;
 		FBO* illumination_fbo;
 		FBO* ssao_fbo;
-		Texture* ssao_blur;
+		FBO* ssao_blur;
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;

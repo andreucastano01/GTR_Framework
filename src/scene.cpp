@@ -50,7 +50,7 @@ bool GTR::Scene::load(const char* filename)
 
 	//read global properties
 	background_color = readJSONVector3(json, "background_color", background_color);
-	ambient_light = readJSONVector3(json, "ambient_light", ambient_light );
+	ambient_light = readJSONVector3(json, "ambient_light", ambient_light);
 	main_camera.eye = readJSONVector3(json, "camera_position", main_camera.eye);
 	main_camera.center = readJSONVector3(json, "camera_target", main_camera.center);
 	main_camera.fov = readJSONNumber(json, "camera_fov", main_camera.fov);

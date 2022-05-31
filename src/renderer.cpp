@@ -26,6 +26,9 @@ GTR::Renderer::Renderer() {
 	show_ssao = false;
 	ssaoplus = false;
 	ssao_blur = NULL;
+	average_lum = 1.0;
+	lum_white = 1.0;
+	lum_scale = 1.0;
 
 	ssao_random_points = generateSpherePoints(128, 1, false);
 	ssaoplus_random_points = generateSpherePoints(128, 1, true);
@@ -130,20 +133,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		ssao_fbo->create(width, height, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
 	}
 
-	if (!ssao_blur) {
-		ssao_blur = new Texture();
-		ssao_blur->create(width, height);
-	}
-
-	gbuffers_fbo->depth_texture->bind();
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-	//enable bilinear filtering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	gbuffers_fbo->depth_texture->unbind();
-
 	ssao_fbo->bind();
 
 	Shader* shader = NULL;
@@ -167,13 +156,22 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	quad->render(GL_TRIANGLES);
 
+	ssao_fbo->unbind();
+
+	if (!ssao_blur) {
+		ssao_blur = new FBO();
+		ssao_blur->create(width, height, 1, GL_RGB, GL_UNSIGNED_BYTE, false);
+	}
+
+	ssao_blur->bind();
+
 	shader = Shader::Get("ssao_blur");
 	shader->enable();
 	shader->setUniform("ssaoInput", ssao_fbo->color_textures[0], 0);
 
 	quad->render(GL_TRIANGLES);
 
-	ssao_fbo->unbind();
+	ssao_blur->unbind();
 
 	if (!illumination_fbo) {
 		//create and FBO
@@ -198,14 +196,16 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
 	shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
 	
-	shader->setUniform("u_ssao_texture", ssao_fbo->color_textures[0], 5);
+	shader->setUniform("u_ssao_texture", ssao_blur->color_textures[0], 5);
 	shader->setUniform("u_ambient_light", scene->ambient_light);
 	shader->setUniform("u_camera_position", camera->eye);
 
+	//Solo deberia haber 1 luz direccional en una escena, para optimizacion se puede aplicar singlepass para todas las direccionales por si hubiese luz de sol y luna a la vez
 	for (int i = 0; i < lights.size(); i++) {
 		LightEntity* light = lights[i];
 		if (light->light_type == GTR::eLightType::DIRECTIONAL) {
 			lightToShader(light, shader);
+			break;
 		}
 	}
 	
@@ -229,6 +229,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			gbuffertoshader(gbuffers_fbo, scene, camera, shader);
 			shader->setUniform("u_inverse_viewprojection", inv_vp);
 			shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+			shader->setUniform("u_ambient_light", Vector3()); //Solo queremos pintar 1 vez la luz ambiente
 			lightToShader(light, shader);
 			Matrix44 m;
 			vec3 position = light->model * Vector3();
@@ -245,6 +246,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	glFrontFace(GL_CCW);
 	glDisable(GL_CULL_FACE);
 
+	//Render alpha nodes
 	glEnable(GL_DEPTH_TEST);
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (render_calls[i].material->alpha_mode == eAlphaMode::BLEND)
@@ -252,20 +254,17 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 				renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 
-	//Esta bien hecho? (NO)
-	float algo = 3.0;
-	shader = Shader::Get("tonemapper");
-	shader->enable();
-	shader->setUniform("u_texture", illumination_fbo->color_textures[0]);
-	shader->setUniform("u_average_lum", algo);
-	shader->setUniform("u_lumwhite2", algo * algo);
-	shader->setUniform("u_scale", algo);
-	quad->render(GL_TRIANGLES);
-
 	illumination_fbo->unbind();
 
+	//Tonemapper
+	shader = Shader::Get("tonemapper");
+	shader->enable();
+	shader->setUniform("u_average_lum", average_lum);
+	shader->setUniform("u_lumwhite2", lum_white * lum_white);
+	shader->setUniform("u_scale", lum_scale);
+	
 	glDisable(GL_BLEND);
-	illumination_fbo->color_textures[0]->toViewport();
+	illumination_fbo->color_textures[0]->toViewport(shader);
 
 	if (show_ssao) {
 		glDisable(GL_BLEND);
@@ -330,7 +329,8 @@ void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera
 }
 
 void GTR::Renderer::lightToShader(LightEntity* light, Shader* shader) {
-	shader->setUniform("u_light_color", light->color * light->intensity);
+	shader->setUniform("u_light_color", light->color);
+	shader->setUniform("u_light_intensity", light->intensity);
 	shader->setUniform("u_light_position", light->model * Vector3());
 	shader->setUniform("u_light_max_distance", light->max_distance);
 

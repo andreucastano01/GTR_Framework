@@ -246,6 +246,9 @@ void Application::renderDebugGUI(void)
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::ColorEdit3("BG color", scene->background_color.v);
 	ImGui::ColorEdit3("Ambient Light", scene->ambient_light.v);
+	ImGui::DragFloat("average_lum", &renderer->average_lum, 0.01);
+	ImGui::DragFloat("lum_white", &renderer->lum_white, 0.01);
+	ImGui::DragFloat("lum_scale", &renderer->lum_scale, 0.01);
 	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
 	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);
 	ImGui::Checkbox("ssao+", &renderer->ssaoplus);
