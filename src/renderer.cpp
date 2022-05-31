@@ -26,12 +26,57 @@ GTR::Renderer::Renderer() {
 	show_ssao = false;
 	ssaoplus = false;
 	ssao_blur = NULL;
+	irr_fbo = NULL;
 	average_lum = 1.0;
 	lum_white = 1.0;
 	lum_scale = 1.0;
 
 	ssao_random_points = generateSpherePoints(128, 1, false);
 	ssaoplus_random_points = generateSpherePoints(128, 1, true);
+}
+
+void GTR::Renderer::generateProbes(GTR::Scene* scene) {
+	probes.clear();
+	//define the corners of the axis aligned grid
+	//this can be done using the boundings of our scene
+	Vector3 start_pos(-300, 5, -300);
+	Vector3 end_pos(300, 150, 300);
+
+	//define how many probes you want per dimension
+	Vector3 dim(12, 6, 12);
+
+	//compute the vector from one corner to the other
+	Vector3 delta = (end_pos - start_pos);
+
+	//and scale it down according to the subdivisions
+	//we substract one to be sure the last probe is at end pos
+	delta.x /= (dim.x - 1);
+	delta.y /= (dim.y - 1);
+	delta.z /= (dim.z - 1);
+
+	for (int z = 0; z < dim.z; ++z) {
+		for (int y = 0; y < dim.y; ++y) {
+			for (int x = 0; x < dim.x; ++x)
+			{
+				sProbe p;
+				p.local.set(x, y, z);
+
+				//index in the linear array
+				p.index = x + y * dim.x + z * dim.x * dim.y;
+
+				//and its position
+				p.pos = start_pos + delta * Vector3(x, y, z);
+				probes.push_back(p);
+			}
+		}
+	}
+
+	for (int iP = 0; iP < probes.size(); iP++)
+	{
+		std::cout << "Generando probe numero " << iP << " de " << probes.size() << std::endl;
+		int probe_index = iP;
+		captureProbe(probes[iP], scene);
+	}
 }
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
@@ -88,9 +133,12 @@ void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
 			renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
 
-	glViewport(Application::instance->window_width - 256, 0, 256, 256);
+	for(int i = 0; i < probes.size(); i++)
+		renderProbe(probes[i].pos, 2, probes[i].sh.coeffs[0].v);
+
+	/*glViewport(Application::instance->window_width - 256, 0, 256, 256);
 	showShadowMap(lights[0]); //Showing shadowmap from light 0, if need change light number
-	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);
+	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);*/
 }
 
 void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
@@ -771,6 +819,66 @@ void GTR::Renderer::renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Mater
 	shader->disable();
 
 	glFrontFace(GL_CCW);
+}
+
+void GTR::Renderer::renderProbe(Vector3 pos, float size, float* coeffs)
+{
+	Camera* camera = Camera::current;
+	Shader* shader = Shader::Get("probe");
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj", false, false);
+
+	glEnable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
+	Matrix44 model;
+	model.setTranslation(pos.x, pos.y, pos.z);
+	model.scale(size, size, size);
+
+	shader->enable();
+	shader->setUniform("u_viewprojection",
+		camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform3Array("u_coeffs", coeffs, 9);
+
+	mesh->render(GL_TRIANGLES);
+}
+
+void GTR::Renderer::captureProbe(sProbe& probe, GTR::Scene* scene) {
+	FloatImage images[6]; //here we will store the six views
+	Camera cam;
+
+//set the fov to 90 and the aspect to 1
+	cam.setPerspective(90, 1, 0.1, 1000);
+
+	if (irr_fbo == NULL) {
+		irr_fbo = new FBO();
+		irr_fbo->create(64, 64, 1, GL_RGB, GL_FLOAT);
+	}
+
+	for (int i = 0; i < 6; i++) //for every cubemap face
+	{
+		//compute camera orientation using defined vectors
+		Vector3 eye = probe.pos;
+		Vector3 front = cubemapFaceNormals[i][2];
+		Vector3 center = probe.pos + front;
+		Vector3 up = cubemapFaceNormals[i][1];
+		cam.lookAt(eye, center, up);
+		cam.enable();
+
+		//render the scene from this point of view
+		irr_fbo->bind();
+		renderForward(scene, &cam);
+		irr_fbo->unbind();
+
+		//read the pixels back and store in a FloatImage
+		images[i].fromTexture(irr_fbo->color_textures[0]);
+	}
+
+	//compute the coefficients given the six images
+	probe.sh = computeSH(images);
+
 }
 
 

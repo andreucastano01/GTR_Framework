@@ -27,13 +27,6 @@
 			"scale": [ 10, 10, 10 ]
 		},
 		{
-			"name": "decal",
-			"type": "DECAL",
-			"albedo": "textures/graffiti.png",
-			"position": [ 0, 0, 0 ],
-			"scale": [ 2, 1, 1 ]
-		},
-		{
 			"name": "car1",
 			"type": "PREFAB",
 			"filename": "prefabs/gmc/scene.gltf",

@@ -298,6 +298,7 @@ void Application::onKeyDown( SDL_KeyboardEvent event )
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
 		case SDLK_p: renderer->pipeline = (renderer->pipeline == GTR::Renderer::epipeline::FORWARD ? GTR::Renderer::epipeline::DEFERRED : GTR::Renderer::epipeline::FORWARD); break;
 		case SDLK_l: renderer->light_render = (renderer->light_render == GTR::Renderer::elightrender::MULTIPASS ? GTR::Renderer::elightrender::SINGLEPASS : GTR::Renderer::elightrender::MULTIPASS); break;
+		case SDLK_SPACE: renderer->generateProbes(scene); break;
 		case SDLK_F5: Shader::ReloadAll(); break;
 		case SDLK_F6:
 			scene->clear();

@@ -1,5 +1,6 @@
 #pragma once
 #include "prefab.h"
+#include "sphericalharmonics.h"
 
 //forward declarations
 class Camera;
@@ -18,6 +19,15 @@ namespace GTR {
 		BoundingBox world_bounding;
 		float distance_to_camera;
 	};
+
+	//struct to store probes
+	struct sProbe {
+		Vector3 pos; //where is located
+		Vector3 local; //its ijk pos in the matrix
+		int index; //its index in the linear array
+		SphericalHarmonics sh; //coeffs
+	};
+
 	
 	// This class is in charge of rendering anything in our system.
 	// Separating the render from anything else makes the code 
@@ -39,11 +49,13 @@ namespace GTR {
 		std::vector<LightEntity*> lights;
 		epipeline pipeline;
 		elightrender light_render;
+
 		void generateShadowMap(LightEntity* light);
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
 		void showShadowMap(LightEntity* light);
 		void lightToShader(LightEntity* light, Shader* shader);
 		void gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader);
+
 		bool show_gbuffers;
 		bool show_ssao;
 		bool ssaoplus;
@@ -55,9 +67,15 @@ namespace GTR {
 		FBO* illumination_fbo;
 		FBO* ssao_fbo;
 		FBO* ssao_blur;
+		FBO* irr_fbo;
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;
+
+		std::vector<sProbe> probes;
+		void generateProbes(GTR::Scene* scene);
+		void renderProbe(Vector3 pos, float size, float* coeffs);
+		void captureProbe(sProbe& probe, GTR::Scene* scene);
 
 		Renderer();
 
