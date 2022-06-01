@@ -82,6 +82,9 @@ namespace GTR {
 		void renderProbe(Vector3 pos, float size, float* coeffs);
 		void captureProbe(sProbe& probe, GTR::Scene* scene);
 
+		Texture* skybox;
+		void generateSkybox(Camera* camera);
+
 		Renderer();
 
 		//Render types

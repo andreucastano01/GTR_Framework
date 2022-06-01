@@ -1,6 +1,7 @@
 //example of some shaders compiled
 flat basic.vs flat.fs
 texture basic.vs texture.fs
+skybox basic.vs skybox.fs
 gamma basic.vs gamma.fs
 gbuffers basic.vs gbuffers.fs
 deferred quad.vs deferred.fs
@@ -252,7 +253,7 @@ out vec2 v_uv;
 void main()
 {	
 	v_uv = a_coord;
-	gl_Position = vec4( a_vertex, 1.0 );
+	gl_Position = vec4(a_vertex, 1.0);
 }
 
 
@@ -291,12 +292,29 @@ void main()
 {
 	vec2 uv = v_uv;
 	vec4 color = u_color;
-	color *= texture( u_texture, v_uv );
+	color *= texture(u_texture, v_uv);
 
 	if(color.a < u_alpha_cutoff)
 		discard;
 
 	FragColor = color;
+}
+
+\skybox.fs
+
+#version 330 core
+
+in vec3 v_world_position;
+
+uniform samplerCube u_texture;
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec3 V = normalize(u_camera_position - v_world_position);
+	FragColor = texture(u_texture, V);
 }
 
 \gamma.fs

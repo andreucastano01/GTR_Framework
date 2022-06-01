@@ -290,7 +290,7 @@ void Application::renderDebugGUI(void)
 }
 
 //Keyboard event handler (sync input)
-void Application::onKeyDown( SDL_KeyboardEvent event )
+void Application::onKeyDown(SDL_KeyboardEvent event)
 {
 	switch(event.keysym.sym)
 	{

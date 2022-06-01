@@ -32,9 +32,35 @@ GTR::Renderer::Renderer() {
 	average_lum = 1.0;
 	lum_white = 1.0;
 	lum_scale = 1.0;
+	skybox = CubemapFromHDRE("data/night.hdre");
 
 	ssao_random_points = generateSpherePoints(128, 1, false);
 	ssaoplus_random_points = generateSpherePoints(128, 1, true);
+}
+
+void GTR::Renderer::generateSkybox(Camera* camera) {
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj", false, false);
+	Shader* shader = Shader::Get("skybox");
+	shader->enable();
+
+	Matrix44 model;
+
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_DEPTH_TEST);
+
+	model.setTranslation(camera->eye.x, camera->eye.y, camera->eye.z);
+	model.scale(5, 5, 5);
+
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_model", model);
+	shader->setUniform("u_texture", skybox, 0);
+
+	mesh->render(GL_TRIANGLES);
+	shader->disable();
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void GTR::Renderer::generateProbes(GTR::Scene* scene) {
@@ -115,6 +141,13 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 {
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	checkGLErrors();
+	generateSkybox(camera);
+
 	lights.clear();
 	render_calls.clear();
 
@@ -157,13 +190,6 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 }
 
 void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
-	//set the clear color (the background color)
-	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
-
-	// Clear the color and the depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	checkGLErrors();
-
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
 			renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
@@ -177,6 +203,7 @@ void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
 	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);*/
 }
 
+//Mirar skybox en deferred y girar skybox
 void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	int width = Application::instance->window_width;
 	int height = Application::instance->window_height;
@@ -194,7 +221,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	inv_vp.inverse();
 
 	gbuffers_fbo->bind();
-
+	
 	//set the clear color (the background color)
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 
