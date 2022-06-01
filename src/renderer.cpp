@@ -25,8 +25,10 @@ GTR::Renderer::Renderer() {
 	show_gbuffers = false;
 	show_ssao = false;
 	ssaoplus = false;
+	show_irr_texture = false;
 	ssao_blur = NULL;
 	irr_fbo = NULL;
+	probes_texture = NULL;
 	average_lum = 1.0;
 	lum_white = 1.0;
 	lum_scale = 1.0;
@@ -44,6 +46,10 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 
 	//define how many probes you want per dimension
 	Vector3 dim(12, 6, 12);
+
+	startpos = start_pos;
+	endpos = end_pos;
+	dimpos = dim;
 
 	//compute the vector from one corner to the other
 	Vector3 delta = (end_pos - start_pos);
@@ -77,6 +83,34 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 		int probe_index = iP;
 		captureProbe(probes[iP], scene);
 	}
+
+	if (probes_texture != NULL) delete probes_texture;
+
+	//create the texture to store the probes (do this ONCE!!!)
+	probes_texture = new Texture(
+		9, //9 coefficients per probe
+		probes.size(), //as many rows as probes
+		GL_RGB, //3 channels per coefficient
+		GL_FLOAT); //they require a high range
+
+		//we must create the color information for the texture. because every SH are 27 floats in the RGB,RGB,... order, we can create an array of SphericalHarmonics and use it as pixels of the texture
+	SphericalHarmonics* sh_data = NULL;
+	sh_data = new SphericalHarmonics[dim.x * dim.y * dim.z];
+
+	//here we fill the data of the array with our probes in x,y,z order
+	for (int i = 0; i < probes.size(); ++i)
+		sh_data[i] = probes[i].sh;
+
+	//now upload the data to the GPU as a texture
+	probes_texture->upload(GL_RGB, GL_FLOAT, false, (uint8*)sh_data);
+
+	//disable any texture filtering when reading
+	probes_texture->bind();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	//always free memory after allocating it!!!
+	delete[] sh_data;
 }
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
@@ -118,6 +152,8 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 
 	if (pipeline == FORWARD) renderForward(scene, camera);
 	else renderDeferred(scene, camera);
+
+	if (probes_texture && show_irr_texture) probes_texture->toViewport();
 }
 
 void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
@@ -289,6 +325,24 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			//do the draw call that renders the mesh into the screen
 			sphere->render(GL_TRIANGLES);
 		}
+	}
+
+	if (probes_texture) {
+		shader = Shader::Get("irradiance");
+		shader->enable();
+		gbuffertoshader(gbuffers_fbo, scene, camera, shader);
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+		shader->setUniform("u_ssao_texture", ssao_blur->color_textures[0], 5);
+		shader->setUniform("u_irr_texture", probes_texture, 0);
+		shader->setUniform("u_irr_start", startpos);
+		shader->setUniform("u_irr_end", endpos);
+		shader->setUniform("u_irr_dim", dimpos);
+		shader->setUniform("u_irr_normal_distance", 0.1f);
+		shader->setUniform("u_num_probes", probes_texture->height);
+		shader->setUniform("u_irr_delta", endpos - startpos);
+
+		quad->render(GL_TRIANGLES);
 	}
 
 	glFrontFace(GL_CCW);

@@ -59,6 +59,7 @@ namespace GTR {
 		bool show_gbuffers;
 		bool show_ssao;
 		bool ssaoplus;
+		bool show_irr_texture;
 		float average_lum;
 		float lum_white;
 		float lum_scale;
@@ -68,11 +69,15 @@ namespace GTR {
 		FBO* ssao_fbo;
 		FBO* ssao_blur;
 		FBO* irr_fbo;
+		Texture* probes_texture;
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;
 
 		std::vector<sProbe> probes;
+		Vector3 startpos;
+		Vector3 endpos;
+		Vector3 dimpos;
 		void generateProbes(GTR::Scene* scene);
 		void renderProbe(Vector3 pos, float size, float* coeffs);
 		void captureProbe(sProbe& probe, GTR::Scene* scene);
