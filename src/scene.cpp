@@ -127,6 +127,8 @@ GTR::BaseEntity* GTR::Scene::createEntity(std::string type)
 		return new GTR::PrefabEntity();
 	if (type == "LIGHT")
 		return new GTR::LightEntity();
+	if (type == "DECAL")
+		return new GTR::DecalEntity();
     return NULL;
 }
 
@@ -219,4 +221,19 @@ void GTR::LightEntity::renderInMenu() {
 	ImGui::DragFloat("Area size", &area_size);
 	ImGui::Checkbox("Cast_shadows", &cast_shadows);
 	ImGui::DragFloat("Shadow bias", &shadow_bias, 0.01);
+}
+
+GTR::DecalEntity::DecalEntity() {
+	entity_type = eEntityType::DECALL;
+}
+
+void GTR::DecalEntity::renderInMenu(){
+
+}
+
+void GTR::DecalEntity::configure(cJSON* json) {
+	if (cJSON_GetObjectItem(json, "texture"))
+	{
+		texture = cJSON_GetObjectItem(json, "texture")->valuestring;
+	}
 }

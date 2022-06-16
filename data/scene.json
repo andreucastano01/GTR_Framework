@@ -1,6 +1,6 @@
 {
 	"background_color": [ 0.01, 0.01, 0.1 ],
-	"ambient_light": [ 0.18, 0.16, 0.2 ],
+	"ambient_light": [ 1, 1, 1 ],
 	"camera_position": [ -300, 90, -150 ],
 	"camera_target": [ 0, 40, 0 ],
 	"camera_fov": 60,
@@ -77,6 +77,13 @@
 			"angle": -90,
 			"scale": [ 0.8, 0.8, 0.8 ]
 		},
+		{
+			"name": "decal",
+			"type": "DECAL",
+			"position": [ 0, 0, 0 ],
+			"scale": [ 40, 10, 10 ],
+			"texture": "textures/mario_decal.png"
+		}, 
 		{
 			"name": "spot",
 			"type": "LIGHT",

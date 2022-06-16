@@ -22,6 +22,7 @@ GTR::Renderer::Renderer() {
 	gbuffers_fbo = NULL;
 	illumination_fbo = NULL;
 	ssao_fbo = NULL;
+	decals_fbo = NULL;
 	show_gbuffers = false;
 	show_ssao = false;
 	ssaoplus = false;
@@ -33,6 +34,7 @@ GTR::Renderer::Renderer() {
 	lum_white = 1.0;
 	lum_scale = 1.0;
 	skybox = CubemapFromHDRE("data/night.hdre");
+	cube.createCube();
 
 	ssao_random_points = generateSpherePoints(128, 1, false);
 	ssaoplus_random_points = generateSpherePoints(128, 1, true);
@@ -137,19 +139,15 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 
 	//always free memory after allocating it!!!
 	delete[] sh_data;
+
+	probes_texture->unbind();
 }
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 {
-	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
-
-	// Clear the color and the depth buffer
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	checkGLErrors();
-	generateSkybox(camera);
-
 	lights.clear();
 	render_calls.clear();
+	decals.clear();
 
 	//render entities and lights
 	for (int i = 0; i < scene->entities.size(); ++i)
@@ -171,6 +169,12 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 			LightEntity* lent = (GTR::LightEntity*)ent;
 			lights.push_back(lent);
 		}
+
+		//is a decal!
+		if (ent->entity_type == DECALL) {
+			DecalEntity* dent = (GTR::DecalEntity*)ent;
+			decals.push_back(dent);
+		}
 	}
 
 	//Ordenar rendercalls
@@ -189,7 +193,15 @@ void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
 	if (probes_texture && show_irr_texture) probes_texture->toViewport();
 }
 
+//Aqui hay algo que no me genera bien la luz
 void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
+	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
+
+	// Clear the color and the depth buffer
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	checkGLErrors();
+	generateSkybox(camera);
+
 	for (int i = 0; i < render_calls.size(); i++) {
 		if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
 			renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
@@ -203,10 +215,11 @@ void GTR::Renderer::renderForward(GTR::Scene* scene, Camera* camera) {
 	glViewport(0, 0, Application::instance->window_width, Application::instance->window_height);*/
 }
 
-//Mirar skybox en deferred y girar skybox
+
 void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	int width = Application::instance->window_width;
 	int height = Application::instance->window_height;
+	Shader* shader = NULL;
 
 	if (!gbuffers_fbo) {
 		//create and FBO
@@ -214,6 +227,10 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 		//create 3 textures of 4 components
 		gbuffers_fbo->create(width, height,	3, GL_RGBA, GL_UNSIGNED_BYTE, true);
+
+		decals_fbo = new FBO();
+
+		decals_fbo->create(width, height, 3, GL_RGBA, GL_UNSIGNED_BYTE, true);
 	}
 
 	Mesh* quad = Mesh::getQuad();
@@ -221,10 +238,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	inv_vp.inverse();
 
 	gbuffers_fbo->bind();
-	
-	//set the clear color (the background color)
-	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
-
 	// Clear the color and the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	checkGLErrors();
@@ -236,6 +249,33 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	gbuffers_fbo->unbind();
 
+	//decals
+	gbuffers_fbo->color_textures[0]->copyTo(decals_fbo->color_textures[0]);
+	gbuffers_fbo->color_textures[1]->copyTo(decals_fbo->color_textures[1]);
+	gbuffers_fbo->color_textures[2]->copyTo(decals_fbo->color_textures[2]);
+	gbuffers_fbo->depth_texture->copyTo(decals_fbo->depth_texture);
+
+	if (decals.size()) {
+		gbuffers_fbo->bind();
+
+		shader = Shader::Get("decal");
+		shader->enable();
+		shader->setUniform("u_depth_texture", decals_fbo->depth_texture, 4);
+		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+		shader->setUniform("u_camera_position", camera->eye);
+
+
+		for (int i = 0; i < decals.size(); i++) {
+			DecalEntity* decal = decals[i];
+			shader->setUniform("u_model", decal->model);
+			cube.render(GL_TRIANGLES);
+		}
+
+		gbuffers_fbo->unbind();
+	}
+
 	if (!ssao_fbo) {
 		//create and FBO
 		ssao_fbo = new FBO();
@@ -246,7 +286,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	ssao_fbo->bind();
 
-	Shader* shader = NULL;
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
 	if (ssaoplus) {
@@ -300,6 +339,8 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	glDisable(GL_DEPTH_TEST);
 	glClearColor(scene->background_color.x, scene->background_color.y, scene->background_color.z, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
+	checkGLErrors();
+	generateSkybox(camera);
 
 	shader = Shader::Get("deferred");
 	shader->enable();
@@ -382,6 +423,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			if (camera->testBoxInFrustum(render_calls[i].world_bounding.center, render_calls[i].world_bounding.halfsize))
 				renderMeshWithMaterialandLight(render_calls[i].model, render_calls[i].mesh, render_calls[i].material, camera);
 	}
+
 
 	illumination_fbo->unbind();
 

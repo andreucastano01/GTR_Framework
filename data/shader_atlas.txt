@@ -15,6 +15,7 @@ ssao_blur quad.vs ssao_blur.fs
 multi basic.vs multi.fs
 tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
+decal basic.vs decal.fs
 irradiance quad.vs irradiance.fs
 
 \encodenormalmap
@@ -313,7 +314,7 @@ out vec4 FragColor;
 
 void main()
 {
-	vec3 V = normalize(u_camera_position - v_world_position);
+	vec3 V = normalize(v_world_position - u_camera_position);
 	FragColor = texture(u_texture, V);
 }
 
@@ -1110,6 +1111,34 @@ void main()
 	vec3 irradiance = ComputeSHIrradiance(N, sh);
 
 	FragColor = vec4(irradiance, 1.0);
+}
+
+\decal.fs
+
+#version 330 core
+
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection;
+uniform vec2 u_iRes;
+uniform vec3 u_camera_pos;
+
+uniform sampler2D u_depth_texture;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy;
+	
+	float depth = texture(u_depth_texture, uv).x;
+
+	vec4 screen_pos = vec4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec4 color = vec4(1.0, 0.0, 0.0, 1.0);
+
+	FragColor = color;
 }
 
 \irradiance.fs

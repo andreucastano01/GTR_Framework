@@ -1,6 +1,7 @@
 #pragma once
 #include "prefab.h"
 #include "sphericalharmonics.h"
+#include "mesh.h"
 
 //forward declarations
 class Camera;
@@ -47,6 +48,7 @@ namespace GTR {
 		//add here your functions
 		std::vector<RenderCall> render_calls;
 		std::vector<LightEntity*> lights;
+		std::vector<DecalEntity*> decals;
 		epipeline pipeline;
 		elightrender light_render;
 
@@ -65,6 +67,7 @@ namespace GTR {
 		float lum_scale;
 
 		FBO* gbuffers_fbo;
+		FBO* decals_fbo;
 		FBO* illumination_fbo;
 		FBO* ssao_fbo;
 		FBO* ssao_blur;
@@ -81,6 +84,8 @@ namespace GTR {
 		void generateProbes(GTR::Scene* scene);
 		void renderProbe(Vector3 pos, float size, float* coeffs);
 		void captureProbe(sProbe& probe, GTR::Scene* scene);
+
+		Mesh cube;
 
 		Texture* skybox;
 		void generateSkybox(Camera* camera);
