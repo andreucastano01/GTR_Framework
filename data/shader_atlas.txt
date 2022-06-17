@@ -1121,8 +1121,10 @@ uniform mat4 u_inverse_viewprojection;
 uniform mat4 u_viewprojection;
 uniform vec2 u_iRes;
 uniform vec3 u_camera_pos;
+uniform mat4 u_imodel;
 
 uniform sampler2D u_depth_texture;
+uniform sampler2D u_decal_texture;
 
 out vec4 FragColor;
 
@@ -1136,7 +1138,15 @@ void main()
 	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
 	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
 
-	vec4 color = vec4(1.0, 0.0, 0.0, 1.0);
+	vec3 localpos = (u_imodel * vec4(world_position,1.0)).xyz;
+
+	//if outside of the volume
+	//if( localpos.x < -0.5 || localpos.x > 0.5 || localpos.y < -0.5 || localpos.y > 0.5 || localpos.z < -0.5 || localpos.z > 0.5 )
+	//	discard;
+
+	vec2 decal_uv = localpos.xz + vec2(0.5);
+	vec4 color = texture(u_decal_texture, uv);
+	//vec4 color = vec4(world_position.xyz*0.01, 1.0);
 
 	FragColor = color;
 }

@@ -265,14 +265,23 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		shader->setUniform("u_inverse_viewprojection", inv_vp);
 		shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
 		shader->setUniform("u_camera_position", camera->eye);
-
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		for (int i = 0; i < decals.size(); i++) {
 			DecalEntity* decal = decals[i];
+			Texture* decal_texture = Texture::Get(decal->texture.c_str());
+			if (!decal_texture) continue;
+			shader->setUniform("u_decal_texture", decal_texture, 5);
 			shader->setUniform("u_model", decal->model);
+			
+			Matrix44 imodel = decal->model;
+			imodel.inverse();
+			shader->setUniform("u_imodel", imodel);
 			cube.render(GL_TRIANGLES);
 		}
 
+		glDisable(GL_BLEND);
 		gbuffers_fbo->unbind();
 	}
 
