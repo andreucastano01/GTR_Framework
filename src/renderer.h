@@ -57,6 +57,7 @@ namespace GTR {
 		void showShadowMap(LightEntity* light);
 		void lightToShader(LightEntity* light, Shader* shader);
 		void gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader);
+		void applyFX(Texture* color_texture, Texture* depth_texture, Camera* camera);
 
 		bool show_gbuffers;
 		bool show_ssao;
@@ -66,6 +67,14 @@ namespace GTR {
 		float lum_white;
 		float lum_scale;
 
+		float vigneting;
+		float saturation;
+		float contrast;
+		float threshold;
+		float debug_factor;
+		float debug_factor2;
+
+		Matrix44 vp_matrix_last;
 		FBO* gbuffers_fbo;
 		FBO* decals_fbo;
 		FBO* illumination_fbo;
@@ -73,6 +82,10 @@ namespace GTR {
 		FBO* ssao_blur;
 		FBO* irr_fbo;
 		Texture* probes_texture;
+		Texture* postFX_textureA;
+		Texture* postFX_textureB;
+		Texture* postFX_textureC;
+		Texture* postFX_textureD;
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;

@@ -249,6 +249,15 @@ void Application::renderDebugGUI(void)
 	ImGui::DragFloat("average_lum", &renderer->average_lum, 0.01);
 	ImGui::DragFloat("lum_white", &renderer->lum_white, 0.01);
 	ImGui::DragFloat("lum_scale", &renderer->lum_scale, 0.01);
+
+	ImGui::SliderFloat("Vigneting", &renderer->vigneting, 0.0, 2.0);
+	ImGui::SliderFloat("Saturation", &renderer->saturation, 0.0, 2.0);
+	ImGui::SliderFloat("Debug_factor", &renderer->debug_factor, 0.0, 5.0);
+	ImGui::SliderFloat("Debug_factor2", &renderer->debug_factor2, 0.0, 5.0);
+	ImGui::SliderFloat("Contrast", &renderer->contrast, 0.0, 2.0);
+	ImGui::SliderFloat("Threshold", &renderer->threshold, 0.0, 2.0);
+
+
 	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
 	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);
 	ImGui::Checkbox("ssao+", &renderer->ssaoplus);
@@ -299,7 +308,7 @@ void Application::onKeyDown(SDL_KeyboardEvent event)
 		case SDLK_f: camera->center.set(0, 0, 0); camera->updateViewMatrix(); break;
 		case SDLK_p: renderer->pipeline = (renderer->pipeline == GTR::Renderer::epipeline::FORWARD ? GTR::Renderer::epipeline::DEFERRED : GTR::Renderer::epipeline::FORWARD); break;
 		case SDLK_l: renderer->light_render = (renderer->light_render == GTR::Renderer::elightrender::MULTIPASS ? GTR::Renderer::elightrender::SINGLEPASS : GTR::Renderer::elightrender::MULTIPASS); break;
-		case SDLK_SPACE: renderer->generateProbes(scene); break;
+		//case SDLK_SPACE: renderer->generateProbes(scene); break;
 		case SDLK_i: renderer->show_irr_texture = !renderer->show_irr_texture; break;
 		case SDLK_F5: Shader::ReloadAll(); break;
 		case SDLK_F6:

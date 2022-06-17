@@ -17,6 +17,13 @@ tonemapper quad.vs tonemapper.fs
 probe basic.vs probe.fs
 decal basic.vs decal.fs
 irradiance quad.vs irradiance.fs
+vigneting quad.vs vigneting.fs
+threshold quad.vs threshold.fs
+blur quad.vs blur.fs
+contrast quad.vs contrast.fs
+mix quad.vs mix.fs
+motionblur quad.vs motionblur.fs
+ffxa quad.vs ffxa.fs
 
 \encodenormalmap
 
@@ -1225,4 +1232,222 @@ void main()
 	vec3 color = texture(u_gb0_texture, uv).xyz * irradiance;
 
 	FragColor = vec4(color, 1.0);
+}
+
+\greyscale.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec4 color = texture(u_texture, v_uv);
+	color.xyz = vec3((color.x + color.y + color.z)/3.0);
+
+	FragColor = color;
+}
+
+\vigneting.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+
+uniform float u_vigneting;
+uniform float u_saturation;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = texture(u_texture, uv);
+	vec3 desaturated = vec3((color.x + color.y + color.z)/3.0);
+	color.xyz = mix(desaturated, color.xyz, u_saturation);
+
+	vec3 vigneting = color.xyz * pow(1.2 - length(v_uv - vec2(0.5, 0.5)),4.0);
+	color.xyz = mix(color.xyz, vigneting, u_vigneting);
+
+	FragColor = color;
+}
+
+\threshold.fs
+
+#version 330 core
+
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_texture;
+uniform float u_threshold;
+
+void main() {
+   vec4 color = texture(u_texture, v_uv);
+   if(color.x < u_threshold) color.x = 0.0;
+   if(color.y < u_threshold) color.y = 0.0;
+   if(color.z < u_threshold) color.z = 0.0;
+   gl_FragColor = color;
+}
+
+
+\blur.fs
+
+#version 330 core
+
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_texture;
+uniform vec2 u_offset;
+uniform float u_intensity;
+
+void main() {
+   vec4 sum = vec4(0.0);
+   sum += texture2D(u_texture, v_uv + u_offset * -4.0) * 0.05/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * -3.0) * 0.09/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * -2.0) * 0.12/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * -1.0) * 0.15/0.98;
+   sum += texture2D(u_texture, v_uv) * 0.16/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * 4.0) * 0.05/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * 3.0) * 0.09/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * 2.0) * 0.12/0.98;
+   sum += texture2D(u_texture, v_uv + u_offset * 1.0) * 0.15/0.98;
+   gl_FragColor = u_intensity * sum;
+}
+
+\contrast.fs
+
+#version 330 core
+
+in vec2 v_uv;
+
+uniform sampler2D u_texture;
+uniform float u_intensity;
+
+out vec4 FragColor;
+
+void main()
+{
+	vec2 uv = v_uv;
+	vec4 color = texture(u_texture, uv);
+	color.xyz = (color.xyz - vec3(0.5)) * u_intensity + vec3(0.5);
+
+	FragColor = color;
+}
+
+
+\mix.fs
+
+#version 330 core
+
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_textureA;
+uniform sampler2D u_textureB;
+uniform float u_intensity;
+
+void main() {
+	vec4 colorA = texture2D(u_textureA, v_uv);
+	vec4 colorB = texture2D(u_textureB, v_uv);
+
+	gl_FragColor = colorA * u_intensity + colorB;
+}
+
+\motionblur.fs
+
+#version 330 core
+
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_texture;
+uniform sampler2D u_depth_texture;
+uniform mat4 u_inverse_viewprojection;
+uniform mat4 u_viewprojection_old;
+uniform sampler2D u_intensity;
+
+void main() {
+	vec2 uv = v_uv;
+	
+	float depth = texture(u_depth_texture, uv).x;
+	vec4 screen_pos = vec4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
+	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
+
+	vec4 oldpos2d = u_viewprojection_old * vec4(world_position, 1.0);
+	oldpos2d.xyz /= oldpos2d.w;
+	vec2 uv2 = oldpos2d.xy * 0.5 + vec2(0.5);
+
+	vec4 color = vec4(0.0);
+
+	const int SAMPLES = 16;
+
+	for(int i = 0; i < SAMPLES; i++){
+		float f = float(i) / float(SAMPLES);
+		vec2 interpolated_uv = mix(uv, uv2, f);
+		color += texture2D(u_texture, interpolated_uv);
+	}
+
+	color /= float(SAMPLES);
+
+	gl_FragColor = color;
+}
+
+\ffxa.fs
+
+#version 330 core
+
+uniform vec2 u_viewportSize;
+uniform vec2 u_iViewportSize;
+uniform sampler2D u_texture;
+#define FXAA_REDUCE_MIN (1.0/ 128.0)
+#define FXAA_REDUCE_MUL (1.0 / 8.0)
+#define FXAA_SPAN_MAX 8.0
+
+out vec4 FragColor;
+
+vec4 applyFXAA(sampler2D tex, vec2 fragCoord) {
+	vec4 color = vec4(0.0);
+	/*vec2 u_iViewportSize = vec2(1.0 / u_viewportSize.x, 1.0 / u_viewportSize.y);*/
+	vec3 rgbNW = texture2D(tex, (fragCoord + vec2(-1.0, -1.0)) * u_iViewportSize).xyz;
+	vec3 rgbNE = texture2D(tex, (fragCoord + vec2(1.0, -1.0)) * u_iViewportSize).xyz;
+	vec3 rgbSW = texture2D(tex, (fragCoord + vec2(-1.0, 1.0)) * u_iViewportSize).xyz;
+	vec3 rgbSE = texture2D(tex, (fragCoord + vec2(1.0, 1.0)) * u_iViewportSize).xyz;
+	vec3 rgbM  = texture2D(tex, fragCoord  * u_iViewportSize).xyz;
+	vec3 luma = vec3(0.299, 0.587, 0.114);
+	float lumaNW = dot(rgbNW, luma);
+	float lumaNE = dot(rgbNE, luma);
+	float lumaSW = dot(rgbSW, luma);
+	float lumaSE = dot(rgbSE, luma);
+	float lumaM  = dot(rgbM,  luma);
+	float lumaMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));
+	float lumaMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));
+	
+	vec2 dir;
+	dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+	dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+	float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * (0.25 * FXAA_REDUCE_MUL), FXAA_REDUCE_MIN);
+
+	float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+	dir = min(vec2(FXAA_SPAN_MAX, FXAA_SPAN_MAX), max(vec2(-FXAA_SPAN_MAX, -FXAA_SPAN_MAX), dir * rcpDirMin)) * u_iViewportSize;
+
+	vec3 rgbA = 0.5 * (texture2D(tex, fragCoord * u_iViewportSize + dir * (1.0 / 3.0 - 0.5)).xyz + texture2D(tex, fragCoord * u_iViewportSize + dir * (2.0 / 3.0 - 0.5)).xyz);
+	vec3 rgbB = rgbA * 0.5 + 0.25 * (texture2D(tex, fragCoord * u_iViewportSize + dir * -0.5).xyz + texture2D(tex, fragCoord * u_iViewportSize + dir * 0.5).xyz);
+
+	//return vec4(rgbA,1.0);
+	float lumaB = dot(rgbB, luma);
+	if ((lumaB < lumaMin) || (lumaB > lumaMax))
+		color = vec4(rgbA, 1.0);
+	else
+		color = vec4(rgbB, 1.0);
+	return color;
+}
+
+void main() {
+	FragColor = applyFXAA(u_texture, gl_FragCoord.xy);
 }

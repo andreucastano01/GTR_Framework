@@ -30,9 +30,22 @@ GTR::Renderer::Renderer() {
 	ssao_blur = NULL;
 	irr_fbo = NULL;
 	probes_texture = NULL;
+	postFX_textureA = NULL;
+	postFX_textureB = NULL;
+	postFX_textureC = NULL;
+	postFX_textureD = NULL;
 	average_lum = 1.0;
 	lum_white = 1.0;
 	lum_scale = 1.0;
+
+	vigneting = 1.0;
+	saturation = 1.0;
+	debug_factor = 1.0;
+	debug_factor2 = 1.0;
+	threshold = 0.9;
+	contrast = 1.0;
+
+
 	skybox = CubemapFromHDRE("data/night.hdre");
 	cube.createCube();
 
@@ -343,6 +356,11 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 		//create 1 texture of 3 components
 		illumination_fbo->create(width, height, 1, GL_RGB, GL_FLOAT, true);
+
+		postFX_textureA = new Texture(width, height, GL_RGB, GL_FLOAT, false);
+		postFX_textureB = new Texture(width, height, GL_RGB, GL_FLOAT, false);
+		postFX_textureC = new Texture(width, height, GL_RGB, GL_FLOAT, false);
+		postFX_textureD = new Texture(width, height, GL_RGB, GL_FLOAT, false);
 	}
 
 	illumination_fbo->bind();
@@ -409,7 +427,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		}
 	}
 
-	if (probes_texture) {
+	/*if (probes_texture) {
 		shader = Shader::Get("irradiance");
 		shader->enable();
 		gbuffertoshader(gbuffers_fbo, scene, camera, shader);
@@ -425,7 +443,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		shader->setUniform("u_irr_delta", endpos - startpos);
 
 		quad->render(GL_TRIANGLES);
-	}
+	}*/
 
 	glFrontFace(GL_CCW);
 	glDisable(GL_CULL_FACE);
@@ -441,15 +459,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	illumination_fbo->unbind();
 
-	//Tonemapper
-	shader = Shader::Get("tonemapper");
-	shader->enable();
-	shader->setUniform("u_average_lum", average_lum);
-	shader->setUniform("u_lumwhite2", lum_white * lum_white);
-	shader->setUniform("u_scale", lum_scale);
-	
-	glDisable(GL_BLEND);
-	illumination_fbo->color_textures[0]->toViewport(shader);
+	applyFX(illumination_fbo->color_textures[0], gbuffers_fbo->depth_texture, camera);
 
 	if (show_ssao) {
 		glDisable(GL_BLEND);
@@ -477,6 +487,117 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	}
 }
 
+void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Camera* camera) {
+	Shader* shader = NULL;
+	Texture* current_texture = color_texture;
+	FBO* fbo = NULL;
+
+	//FFXA (acabar esto)
+	/*fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("ffxa");
+	shader->enable();
+	shader->setUniform("u_viewportSize", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_width));
+	shader->setUniform("u_iViewportSize", Vector2((float)Application::instance->window_width, (float)Application::instance->window_height));
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);*/
+
+	//Motion Blur
+	fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	Matrix44 inv_vp = camera->viewprojection_matrix;
+	inv_vp.inverse();
+	shader = Shader::Get("motionblur");
+	shader->enable();
+	shader->setUniform("u_depth_texture", depth_texture, 1);
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	shader->setUniform("u_viewprojection_old", vp_matrix_last);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);
+
+	vp_matrix_last = camera->viewprojection_matrix;
+
+
+	//Saturation + Vigneting
+	fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("vigneting");
+	shader->enable();
+	shader->setUniform("u_vigneting", vigneting);
+	shader->setUniform("u_saturation", saturation);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);
+
+
+	//Blur
+	fbo = Texture::getGlobalFBO(postFX_textureC);
+	fbo->bind();
+	shader = Shader::Get("contrast");
+	shader->enable();
+	shader->setUniform("u_intensity", contrast);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureC;
+
+	fbo = Texture::getGlobalFBO(postFX_textureD);
+	fbo->bind();
+	shader = Shader::Get("threshold");
+	shader->enable();
+	shader->setUniform("u_threshold", threshold);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureD;
+
+	for (int i = 0; i < 16; i++) {
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("blur");
+		shader->enable();
+		shader->setUniform("u_offset", vec2(pow(1.0f, i) / current_texture->width, 0.0) * debug_factor);
+		shader->setUniform("u_intensity", 1.0f);
+		current_texture->toViewport(shader);
+		fbo->unbind();
+
+		fbo = Texture::getGlobalFBO(postFX_textureB);
+		fbo->bind();
+		shader = Shader::Get("blur");
+		shader->enable();
+		shader->setUniform("u_offset", vec2(0.0, pow(1.0f,i) / current_texture->height) * debug_factor);
+		shader->setUniform("u_intensity", 1.0f);
+		postFX_textureA->toViewport(shader);
+		fbo->unbind();
+		current_texture = postFX_textureB;
+	}
+	
+	fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("mix");
+	shader->enable();
+	shader->setUniform("u_intensity", debug_factor2);
+	shader->setUniform("u_textureB", postFX_textureC, 1);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);
+
+
+	//Tonemapper
+	shader = Shader::Get("tonemapper");
+	shader->enable();
+	shader->setUniform("u_average_lum", average_lum);
+	shader->setUniform("u_lumwhite2", lum_white * lum_white);
+	shader->setUniform("u_scale", lum_scale);
+
+	glDisable(GL_BLEND);
+	current_texture->toViewport(shader);
+}
+
 std::vector<Vector3> GTR::generateSpherePoints(int num, float radius, bool hemi) {
 	std::vector<Vector3> points;
 	points.resize(num);
@@ -502,7 +623,7 @@ std::vector<Vector3> GTR::generateSpherePoints(int num, float radius, bool hemi)
 }
 
 
-void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader) {
+void GTR::Renderer::gbuffertoshader(FBO* gbuffers_fbo, GTR::Scene* scene, Camera* camera, Shader* shader){
 
 	//pass the gbuffers to the shader
 	shader->setUniform("u_gb0_texture", gbuffers_fbo->color_textures[0], 1);
