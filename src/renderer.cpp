@@ -253,7 +253,10 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	gbuffers_fbo->color_textures[0]->copyTo(decals_fbo->color_textures[0]);
 	gbuffers_fbo->color_textures[1]->copyTo(decals_fbo->color_textures[1]);
 	gbuffers_fbo->color_textures[2]->copyTo(decals_fbo->color_textures[2]);
-	gbuffers_fbo->depth_texture->copyTo(decals_fbo->depth_texture);
+	
+	decals_fbo->bind();
+	gbuffers_fbo->depth_texture->copyTo(NULL);
+	decals_fbo->unbind();
 
 	if (decals.size()) {
 		gbuffers_fbo->bind();
@@ -267,6 +270,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		shader->setUniform("u_camera_position", camera->eye);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glColorMask(true, true, true, false);
 
 		for (int i = 0; i < decals.size(); i++) {
 			DecalEntity* decal = decals[i];
@@ -281,6 +285,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 			cube.render(GL_TRIANGLES);
 		}
 
+		glColorMask(true, true, true, true);
 		glDisable(GL_BLEND);
 		gbuffers_fbo->unbind();
 	}

@@ -81,7 +81,7 @@
 			"name": "decal",
 			"type": "DECAL",
 			"position": [ 0, 0, 0 ],
-			"scale": [ 40, 10, 10 ],
+			"scale": [ 80, 30, 80 ],
 			"texture": "data/textures/mario_decal.png"
 		}, 
 		{
