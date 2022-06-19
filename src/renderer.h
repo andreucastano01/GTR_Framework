@@ -45,12 +45,18 @@ namespace GTR {
 			DEFERRED
 		};
 
+		enum eirradiance {
+			NORMAL,
+			INTERPOLATED
+		};
+
 		//add here your functions
 		std::vector<RenderCall> render_calls;
 		std::vector<LightEntity*> lights;
 		std::vector<DecalEntity*> decals;
 		epipeline pipeline;
 		elightrender light_render;
+		eirradiance irradiance_mode;
 
 		void generateShadowMap(LightEntity* light);
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
@@ -86,6 +92,8 @@ namespace GTR {
 		Texture* postFX_textureB;
 		Texture* postFX_textureC;
 		Texture* postFX_textureD;
+		Texture* blurred_texture;
+		LightEntity* direct_light;
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;
