@@ -519,18 +519,6 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
 
-	//FFXA (acabar esto)
-	/*fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("ffxa");
-	shader->enable();
-	shader->setUniform("u_viewportSize", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_width));
-	shader->setUniform("u_iViewportSize", Vector2((float)Application::instance->window_width, (float)Application::instance->window_height));
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);*/
-
 	//Chromatic aberration + lens distorsion
 	/*fbo = Texture::getGlobalFBO(postFX_textureA);
 	fbo->bind();
@@ -570,6 +558,17 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
 
+	//FFXA (acabar esto)
+	fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("ffxa");
+	shader->enable();
+	shader->setUniform("u_viewportSize", Vector2((float)Application::instance->window_width, (float)Application::instance->window_width));
+	shader->setUniform("u_iViewportSize", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);
 
 	//Bloom
 	fbo = Texture::getGlobalFBO(postFX_textureC);
@@ -582,16 +581,16 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureC;
 
 	//LUT
-	//fbo = Texture::getGlobalFBO(postFX_textureA);
-	//fbo->bind();
-	//shader = Shader::Get("lut");
-	//shader->enable();
-	//shader->setUniform("u_amount", 3.0f);
-	//shader->setUniform("u_textureB", postFX_textureC, 1);
-	//current_texture->toViewport(shader);
-	//fbo->unbind();
-	//current_texture = postFX_textureA;
-	//std::swap(postFX_textureA, postFX_textureB);
+	/*fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("lut");
+	shader->enable();
+	shader->setUniform("u_amount", 3.0f);
+	shader->setUniform("u_textureB", postFX_textureC, 1);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);*/
 
 
 	fbo = Texture::getGlobalFBO(postFX_textureD);
