@@ -1243,9 +1243,7 @@ void main()
 #version 330 core
 
 uniform mat4 u_inverse_viewprojection;
-uniform mat4 u_viewprojection;
 uniform vec2 u_iRes;
-uniform vec3 u_camera_pos;
 
 uniform mat4 u_imodel;
 

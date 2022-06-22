@@ -284,7 +284,6 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
 		shader->setUniform("u_inverse_viewprojection", inv_vp);
 		shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
-		shader->setUniform("u_camera_position", camera->eye);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glColorMask(true, true, true, false);
