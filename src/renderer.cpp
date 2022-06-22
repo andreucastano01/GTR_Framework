@@ -25,6 +25,7 @@ GTR::Renderer::Renderer() {
 	illumination_fbo = NULL;
 	ssao_fbo = NULL;
 	decals_fbo = NULL;
+	volumetric_fbo = NULL;
 	show_gbuffers = false;
 	show_ssao = false;
 	ssaoplus = false;
@@ -450,7 +451,31 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	illumination_fbo->unbind();
 
-	applyFX(illumination_fbo->color_textures[0], gbuffers_fbo->depth_texture, camera);
+	if (!volumetric_fbo) {
+		volumetric_fbo = new FBO();
+		volumetric_fbo->create(width, height, 1, GL_RGBA);
+	}
+
+	volumetric_fbo->bind();
+
+	shader = Shader::Get("volumetric");
+	shader->enable();
+	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)volumetric_fbo->color_textures[0]->width, 1.0 / (float)volumetric_fbo->color_textures[0]->height));
+	shader->setUniform("u_camera_position", camera->eye);
+	shader->setUniform("u_air_density", scene->air_density);
+	shader->setUniform("u_light_type", 1.0f);
+	lightToShader(direct_light, shader);
+
+	quad->render(GL_TRIANGLES);
+
+	volumetric_fbo->unbind();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	volumetric_fbo->color_textures[0]->toViewport();
+
+	applyFX(volumetric_fbo->color_textures[0], gbuffers_fbo->depth_texture, camera);
 
 	if (show_ssao) {
 		glDisable(GL_BLEND);

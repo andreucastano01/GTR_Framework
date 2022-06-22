@@ -99,6 +99,7 @@ namespace GTR {
 
 		Vector3 background_color;
 		Vector3 ambient_light;
+		float air_density;
 		Camera main_camera;
 
 		Scene();

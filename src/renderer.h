@@ -87,6 +87,7 @@ namespace GTR {
 		FBO* ssao_fbo;
 		FBO* ssao_blur;
 		FBO* irr_fbo;
+		FBO* volumetric_fbo;
 		Texture* probes_texture;
 		Texture* postFX_textureA;
 		Texture* postFX_textureB;
