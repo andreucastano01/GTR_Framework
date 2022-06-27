@@ -9,6 +9,7 @@ GTR::Scene* GTR::Scene::instance = NULL;
 GTR::Scene::Scene()
 {
 	instance = this;
+	air_density = 0.001;
 }
 
 void GTR::Scene::clear()

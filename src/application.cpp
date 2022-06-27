@@ -249,8 +249,8 @@ void Application::renderDebugGUI(void)
 	ImGui::DragFloat("average_lum", &renderer->average_lum, 0.01);
 	ImGui::DragFloat("lum_white", &renderer->lum_white, 0.01);
 	ImGui::DragFloat("lum_scale", &renderer->lum_scale, 0.01);
-	ImGui::DragFloat("Air_density", &scene->air_density);
 
+	ImGui::SliderFloat("Air_density", &scene->air_density, 0.000, 0.002);
 	ImGui::SliderFloat("Vigneting", &renderer->vigneting, 0.0, 2.0);
 	ImGui::SliderFloat("Saturation", &renderer->saturation, 0.0, 2.0);
 	ImGui::SliderFloat("Debug_factor", &renderer->debug_factor, 0.0, 5.0);

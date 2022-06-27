@@ -451,6 +451,10 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	illumination_fbo->unbind();
 
+	glDisable(GL_BLEND);
+	illumination_fbo->color_textures[0]->toViewport();
+
+
 	if (!volumetric_fbo) {
 		volumetric_fbo = new FBO();
 		volumetric_fbo->create(width, height, 1, GL_RGBA);
@@ -465,17 +469,20 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	shader->setUniform("u_iRes", Vector2(1.0 / (float)volumetric_fbo->color_textures[0]->width, 1.0 / (float)volumetric_fbo->color_textures[0]->height));
 	shader->setUniform("u_camera_position", camera->eye);
 	shader->setUniform("u_air_density", scene->air_density);
-	shader->setUniform("u_light_type", 1.0f);
 	lightToShader(direct_light, shader);
 
 	quad->render(GL_TRIANGLES);
 
 	volumetric_fbo->unbind();
+
+	illumination_fbo->bind();
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	volumetric_fbo->color_textures[0]->toViewport();
+	illumination_fbo->unbind();
+	glDisable(GL_BLEND);
 
-	applyFX(volumetric_fbo->color_textures[0], gbuffers_fbo->depth_texture, camera);
+	applyFX(illumination_fbo->color_textures[0], gbuffers_fbo->depth_texture, camera);
 
 	if (show_ssao) {
 		glDisable(GL_BLEND);
@@ -507,6 +514,8 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	Shader* shader = NULL;
 	Texture* current_texture = color_texture;
 	FBO* fbo = NULL;
+	int width = Application::instance->window_width;
+	int height = Application::instance->window_height;
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 
@@ -529,26 +538,17 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 		shader->setUniform("u_intensity", 1.0f);
 		postFX_textureA->toViewport(shader);
 		fbo->unbind();
+		current_texture = blurred_texture;
 	}
-
-	fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("dof");
-	shader->enable();
-	shader->setUniform("u_textureB", blurred_texture, 1);
-	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_depth_texture", depth_texture, 2);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
+	current_texture = color_texture;
 
 	//Chromatic aberration + lens distorsion
 	/*fbo = Texture::getGlobalFBO(postFX_textureA);
 	fbo->bind();
 	shader = Shader::Get("chrlns");
 	shader->enable();
-	shader->setUniform("resolution", Vector2((float)Application::instance->window_width, (float)Application::instance->window_width));
+	shader->setUniform("resolution", Vector2((float)width, (float)height));
 	current_texture->toViewport(shader);
 	fbo->unbind();
 	current_texture = postFX_textureA;
@@ -569,7 +569,6 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 
 	vp_matrix_last = camera->viewprojection_matrix;
 
-
 	//Saturation + Vigneting
 	fbo = Texture::getGlobalFBO(postFX_textureA);
 	fbo->bind();
@@ -582,13 +581,13 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
 
-	//FFXA (acabar esto)
+	//FFXA
 	fbo = Texture::getGlobalFBO(postFX_textureA);
 	fbo->bind();
 	shader = Shader::Get("ffxa");
 	shader->enable();
-	shader->setUniform("u_viewportSize", Vector2((float)Application::instance->window_width, (float)Application::instance->window_width));
-	shader->setUniform("u_iViewportSize", Vector2(1.0 / (float)Application::instance->window_width, 1.0 / (float)Application::instance->window_height));
+	shader->setUniform("u_viewportSize", Vector2((float)width, (float)height));
+	shader->setUniform("u_iViewportSize", Vector2(1.0 / (float)width, 1.0 / (float)height));
 	current_texture->toViewport(shader);
 	fbo->unbind();
 	current_texture = postFX_textureA;
@@ -616,7 +615,7 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);*/
 
-
+	//A partir de aqui me salen cuadrados random
 	fbo = Texture::getGlobalFBO(postFX_textureD);
 	fbo->bind();
 	shader = Shader::Get("threshold");
@@ -658,6 +657,19 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
 
+	//Depth of field
+	fbo = Texture::getGlobalFBO(postFX_textureA);
+	fbo->bind();
+	shader = Shader::Get("dof");
+	shader->enable();
+	shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+	shader->setUniform("u_textureB", blurred_texture, 1);
+	shader->setUniform("u_inverse_viewprojection", inv_vp);
+	shader->setUniform("u_depth_texture", depth_texture, 2);
+	current_texture->toViewport(shader);
+	fbo->unbind();
+	current_texture = postFX_textureA;
+	std::swap(postFX_textureA, postFX_textureB);
 
 	//Tonemapper
 	shader = Shader::Get("tonemapper");

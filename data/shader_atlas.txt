@@ -1308,7 +1308,7 @@ void main()
 		current_pos.xyz += ray_offset;
 	}
 
-	FragColor = vec4(irradiance, transparency);
+	FragColor = vec4(irradiance, 1.0 - transparency);
 }
 
 \decal.fs
@@ -1483,7 +1483,6 @@ uniform sampler2D u_texture;
 uniform sampler2D u_depth_texture;
 uniform mat4 u_inverse_viewprojection;
 uniform mat4 u_viewprojection_old;
-uniform sampler2D u_intensity;
 
 void main() {
 	vec2 uv = v_uv;
@@ -1629,6 +1628,7 @@ void main()
 #version 330 core
 
 in vec2 v_uv;
+uniform vec2 u_iRes;
 
 uniform sampler2D u_texture;
 uniform sampler2D u_textureB;
@@ -1636,7 +1636,7 @@ uniform sampler2D u_depth_texture;
 uniform mat4 u_inverse_viewprojection;
 
 void main(){
-	vec2 uv = v_uv;
+	vec2 uv = gl_FragCoord.xy * u_iRes.xy;
 	vec4 focusColor = texture(u_texture, uv);
 	vec4 outOfFocusColor = texture(u_textureB, uv);
 	float depth = texture(u_depth_texture, uv).x;
@@ -1645,7 +1645,7 @@ void main(){
 	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
 	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
 
-	float blur = smoothstep(10.0, 70.0, abs(world_position.y - depth)); //min_distance y max_distance deberia controlarse desde el debugger
+	float blur = smoothstep(70.0, 50.0, abs(depth - world_position.y)); //min_distance y max_distance deberia controlarse desde el debugger
 
 	gl_FragColor = mix(focusColor, outOfFocusColor, blur);
 }
