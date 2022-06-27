@@ -7,6 +7,14 @@
 class Camera;
 class Shader;
 
+struct sIrrHeader {
+	Vector3 start;
+	Vector3 end;
+	Vector3 delta;
+	Vector3 dims;
+	int num_probes;
+};
+
 namespace GTR {
 	class Prefab;
 	class Material;
@@ -100,12 +108,14 @@ namespace GTR {
 		std::vector<Vector3> ssaoplus_random_points;
 
 		std::vector<sProbe> probes;
-		Vector3 startpos;
-		Vector3 endpos;
-		Vector3 dimpos;
+		Vector3 irr_start_pos;
+		Vector3 irr_end_pos;
+		Vector3 irr_dim_pos;
+		Vector3 irr_delta;
 		void generateProbes(GTR::Scene* scene);
 		void renderProbe(Vector3 pos, float size, float* coeffs);
 		void captureProbe(sProbe& probe, GTR::Scene* scene);
+		bool loadProbes();
 
 		Mesh cube;
 

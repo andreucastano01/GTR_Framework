@@ -92,12 +92,14 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 	//define how many probes you want per dimension
 	Vector3 dim(12, 6, 12);
 
-	startpos = start_pos;
-	endpos = end_pos;
-	dimpos = dim;
+	irr_start_pos = start_pos;
+	irr_end_pos = end_pos;
+	irr_dim_pos = dim;
 
 	//compute the vector from one corner to the other
 	Vector3 delta = (end_pos - start_pos);
+
+	irr_delta = delta;
 
 	//and scale it down according to the subdivisions
 	//we substract one to be sure the last probe is at end pos
@@ -138,9 +140,81 @@ void GTR::Renderer::generateProbes(GTR::Scene* scene) {
 		GL_RGB, //3 channels per coefficient
 		GL_FLOAT); //they require a high range
 
+	probes_texture->bind();
 		//we must create the color information for the texture. because every SH are 27 floats in the RGB,RGB,... order, we can create an array of SphericalHarmonics and use it as pixels of the texture
 	SphericalHarmonics* sh_data = NULL;
 	sh_data = new SphericalHarmonics[dim.x * dim.y * dim.z];
+
+	//here we fill the data of the array with our probes in x,y,z order
+	for (int i = 0; i < probes.size(); ++i)
+		sh_data[i] = probes[i].sh;
+
+	//now upload the data to the GPU as a texture
+	probes_texture->upload(GL_RGB, GL_FLOAT, false, (uint8*)sh_data);
+
+	//disable any texture filtering when reading
+	probes_texture->bind();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	//always free memory after allocating it!!!
+	delete[] sh_data;
+
+	probes_texture->unbind();
+	// saveIrradianceToDisk ---------------------------------
+	//fill header structure
+	sIrrHeader header;
+
+	header.start = start_pos;
+	header.end = end_pos;
+	header.dims = dim;
+	header.delta = delta;
+	header.num_probes = dim.x * dim.y * dim.z;
+
+	//write to file header and probes data
+	FILE* f = fopen("irradiance.bin", "wb");
+	fwrite(&header, sizeof(header), 1, f);
+	fwrite(&(probes[0]), sizeof(sProbe), probes.size(), f);
+	fclose(f);
+}
+
+bool GTR::Renderer::loadProbes() {
+	FILE* f = fopen("irradiance.bin", "rb");
+	if (!f)
+		return false;
+
+	//read header
+	sIrrHeader header;
+	fread(&header, sizeof(header), 1, f);
+
+	//copy info from header to our local vars
+	irr_start_pos = header.start;
+	irr_end_pos = header.end;
+	irr_dim_pos = header.dims;
+	irr_delta = header.delta;
+	int num_probes = header.num_probes;
+
+	//allocate space for the probes
+	probes.resize(num_probes);
+
+
+	//read from disk directly to our probes container in memory
+	fread(&probes[0], sizeof(sProbe), probes.size(), f);
+	fclose(f);
+
+	if (probes_texture != NULL) delete probes_texture;
+
+	//create the texture to store the probes (do this ONCE!!!)
+	probes_texture = new Texture(
+		9, //9 coefficients per probe
+		probes.size(), //as many rows as probes
+		GL_RGB, //3 channels per coefficient
+		GL_FLOAT); //they require a high range
+
+	probes_texture->bind();
+	//we must create the color information for the texture. because every SH are 27 floats in the RGB,RGB,... order, we can create an array of SphericalHarmonics and use it as pixels of the texture
+	SphericalHarmonics* sh_data = NULL;
+	sh_data = new SphericalHarmonics[irr_dim_pos.x * irr_dim_pos.y * irr_dim_pos.z];
 
 	//here we fill the data of the array with our probes in x,y,z order
 	for (int i = 0; i < probes.size(); ++i)
@@ -394,12 +468,12 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	if (probes_texture) {
 		shader->setUniform("u_irr", 1.0f);
 		shader->setUniform("u_irr_texture", probes_texture, 6);
-		shader->setUniform("u_irr_start", startpos);
-		shader->setUniform("u_irr_end", endpos);
-		shader->setUniform("u_irr_dim", dimpos);
+		shader->setUniform("u_irr_start", irr_start_pos);
+		shader->setUniform("u_irr_end", irr_end_pos);
+		shader->setUniform("u_irr_dim", irr_dim_pos);
 		shader->setUniform("u_irr_normal_distance", 0.1f);
 		shader->setUniform("u_num_probes", probes_texture->height);
-		shader->setUniform("u_irr_delta", endpos - startpos);
+		shader->setUniform("u_irr_delta", irr_end_pos - irr_start_pos);
 	}
 	else shader->setUniform("u_irr", 0.0f);
 	
@@ -462,6 +536,7 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 
 	volumetric_fbo->bind();
 
+	//Hacer singlepass para varias luces
 	shader = Shader::Get("volumetric");
 	shader->enable();
 	shader->setUniform("u_depth_texture", gbuffers_fbo->depth_texture, 4);
@@ -523,19 +598,17 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	for (int i = 0; i < 16; i++) {
 		fbo = Texture::getGlobalFBO(postFX_textureA);
 		fbo->bind();
-		shader = Shader::Get("blur");
+		shader = Shader::Get("blur2");
 		shader->enable();
-		shader->setUniform("u_offset", vec2(pow(1.0f, i) / current_texture->width, 0.0) * debug_factor);
-		shader->setUniform("u_intensity", 1.0f);
+		shader->setUniform("parameters", Vector2(1, 0));
 		current_texture->toViewport(shader);
 		fbo->unbind();
 
 		fbo = Texture::getGlobalFBO(blurred_texture);
 		fbo->bind();
-		shader = Shader::Get("blur");
+		shader = Shader::Get("blur2");
 		shader->enable();
-		shader->setUniform("u_offset", vec2(0.0, pow(1.0f, i) / current_texture->height) * debug_factor);
-		shader->setUniform("u_intensity", 1.0f);
+		shader->setUniform("parameters", Vector2(0, 1));
 		postFX_textureA->toViewport(shader);
 		fbo->unbind();
 		current_texture = blurred_texture;
@@ -625,7 +698,7 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	fbo->unbind();
 	current_texture = postFX_textureD;
 
-	for (int i = 0; i < 16; i++) {
+	for (int i = 0; i < 12; i++) {
 		fbo = Texture::getGlobalFBO(postFX_textureA);
 		fbo->bind();
 		shader = Shader::Get("blur");
@@ -666,6 +739,7 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	shader->setUniform("u_textureB", blurred_texture, 1);
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
 	shader->setUniform("u_depth_texture", depth_texture, 2);
+	shader->setUniform("u_camera_position", camera->eye);
 	current_texture->toViewport(shader);
 	fbo->unbind();
 	current_texture = postFX_textureA;
