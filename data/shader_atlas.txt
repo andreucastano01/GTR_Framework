@@ -1636,6 +1636,8 @@ uniform sampler2D u_texture;
 uniform sampler2D u_textureB;
 uniform sampler2D u_depth_texture;
 uniform vec3 camera_position;
+uniform float u_min_distance;
+uniform float u_max_distance;
 uniform mat4 u_inverse_viewprojection;
 
 void main(){
@@ -1648,7 +1650,7 @@ void main(){
 	vec4 proj_worldpos = u_inverse_viewprojection * screen_pos;
 	vec3 world_position = proj_worldpos.xyz / proj_worldpos.w;
 
-	float blur = smoothstep(30.0, 70.0, abs(world_position.y - camera_position.y)); //min_distance y max_distance deberia controlarse desde el debugger
+	float blur = smoothstep(u_min_distance, u_max_distance, abs(world_position.x)); //min_distance y max_distance deberia controlarse desde el debugger
 
 	gl_FragColor = mix(focusColor, outOfFocusColor, blur);
 }

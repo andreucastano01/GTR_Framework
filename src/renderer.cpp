@@ -41,6 +41,8 @@ GTR::Renderer::Renderer() {
 	average_lum = 1.0;
 	lum_white = 1.0;
 	lum_scale = 1.0;
+	min_distance_dof = 70.0;
+	max_distance_dof = 230.0;
 
 	vigneting = 1.0;
 	saturation = 1.0;
@@ -739,6 +741,8 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	shader->setUniform("u_textureB", blurred_texture, 1);
 	shader->setUniform("u_inverse_viewprojection", inv_vp);
 	shader->setUniform("u_depth_texture", depth_texture, 2);
+	shader->setUniform("u_min_distance", min_distance_dof);
+	shader->setUniform("u_max_distance", max_distance_dof);
 	shader->setUniform("u_camera_position", camera->eye);
 	current_texture->toViewport(shader);
 	fbo->unbind();

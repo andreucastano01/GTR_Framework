@@ -257,7 +257,8 @@ void Application::renderDebugGUI(void)
 	ImGui::SliderFloat("Debug_factor2", &renderer->debug_factor2, 0.0, 5.0);
 	ImGui::SliderFloat("Contrast", &renderer->contrast, 0.0, 2.0);
 	ImGui::SliderFloat("Threshold", &renderer->threshold, 0.0, 2.0);
-
+	ImGui::SliderFloat("Min Distance Depth of Field", &renderer->min_distance_dof, 0.0, 1000.0);
+	ImGui::SliderFloat("Max Distance Depth of Field", &renderer->max_distance_dof, 0.0, 1000.0);
 
 	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
 	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);

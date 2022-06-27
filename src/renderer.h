@@ -87,6 +87,8 @@ namespace GTR {
 		float threshold;
 		float debug_factor;
 		float debug_factor2;
+		float min_distance_dof;
+		float max_distance_dof;
 
 		Matrix44 vp_matrix_last;
 		FBO* gbuffers_fbo;
