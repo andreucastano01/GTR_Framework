@@ -20,7 +20,6 @@ GTR::Renderer::Renderer() {
 	direct_light = NULL;
 	pipeline = DEFERRED;
 	light_render = MULTIPASS;
-	irradiance_mode = NORMAL;
 	gbuffers_fbo = NULL;
 	illumination_fbo = NULL;
 	ssao_fbo = NULL;
@@ -30,6 +29,13 @@ GTR::Renderer::Renderer() {
 	show_ssao = false;
 	ssaoplus = false;
 	show_irr_texture = false;
+	motion_blur = false;
+	chr_lns = false;
+	ffxa = false;
+	dof = false;
+	bloom = false;
+	is_rendering_reflections = false;
+	interpolated_irr = false;
 	ssao_blur = NULL;
 	irr_fbo = NULL;
 	probes_texture = NULL;
@@ -51,6 +57,10 @@ GTR::Renderer::Renderer() {
 	threshold = 0.9;
 	contrast = 1.0;
 
+	reflection_fbo = new FBO();
+	reflection_fbo->create(Application::instance->window_width, Application::instance->window_height);
+	reflection_probe_fbo = new FBO();
+	probe = NULL;
 
 	skybox = CubemapFromHDRE("data/night.hdre");
 	cube.createCube();
@@ -237,6 +247,14 @@ bool GTR::Renderer::loadProbes() {
 }
 
 void GTR::Renderer::renderScene(GTR::Scene* scene, Camera* camera)
+{
+	camera->enable();
+	renderSceneForward(scene, camera);
+
+	//renderReflectionProbes(scene, camera);
+}
+
+void GTR::Renderer::renderSceneForward(GTR::Scene* scene, Camera* camera)
 {
 	lights.clear();
 	render_calls.clear();
@@ -468,7 +486,8 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 	lightToShader(direct_light, shader);
 
 	if (probes_texture) {
-		shader->setUniform("u_irr", 1.0f);
+		if(interpolated_irr) shader->setUniform("u_irr", 2.0f);
+		else shader->setUniform("u_irr", 1.0f);
 		shader->setUniform("u_irr_texture", probes_texture, 6);
 		shader->setUniform("u_irr_start", irr_start_pos);
 		shader->setUniform("u_irr_end", irr_end_pos);
@@ -478,6 +497,11 @@ void GTR::Renderer::renderDeferred(GTR::Scene* scene, Camera* camera){
 		shader->setUniform("u_irr_delta", irr_end_pos - irr_start_pos);
 	}
 	else shader->setUniform("u_irr", 0.0f);
+
+	Texture* reflection = skybox;
+	if (probe && !is_rendering_reflections)
+		reflection = probe->texture;
+	shader->setUniform("u_skybox_texture", reflection, 9);
 	
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
@@ -596,53 +620,55 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	Matrix44 inv_vp = camera->viewprojection_matrix;
 	inv_vp.inverse();
 
-	//Blur
-	for (int i = 0; i < 16; i++) {
+	if (dof) {
 		fbo = Texture::getGlobalFBO(postFX_textureA);
 		fbo->bind();
-		shader = Shader::Get("blur2");
+		shader = Shader::Get("nonegativecolors");
 		shader->enable();
-		shader->setUniform("parameters", Vector2(1, 0));
 		current_texture->toViewport(shader);
 		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
 
-		fbo = Texture::getGlobalFBO(blurred_texture);
-		fbo->bind();
-		shader = Shader::Get("blur2");
-		shader->enable();
-		shader->setUniform("parameters", Vector2(0, 1));
-		postFX_textureA->toViewport(shader);
-		fbo->unbind();
-		current_texture = blurred_texture;
+		//Blur
+		for (int i = 0; i < 16; i++) {
+			fbo = Texture::getGlobalFBO(postFX_textureA);
+			fbo->bind();
+			shader = Shader::Get("blur2");
+			shader->enable();
+			shader->setUniform("parameters", Vector2(1, 0));
+			current_texture->toViewport(shader);
+			fbo->unbind();
+
+			fbo = Texture::getGlobalFBO(blurred_texture);
+			fbo->bind();
+			shader = Shader::Get("blur2");
+			shader->enable();
+			shader->setUniform("parameters", Vector2(0, 1));
+			postFX_textureA->toViewport(shader);
+			fbo->unbind();
+			current_texture = blurred_texture;
+		}
+		std::swap(postFX_textureA, postFX_textureB);
+		current_texture = color_texture;
 	}
-	std::swap(postFX_textureA, postFX_textureB);
-	current_texture = color_texture;
 
-	//Chromatic aberration + lens distorsion
-	/*fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("chrlns");
-	shader->enable();
-	shader->setUniform("resolution", Vector2((float)width, (float)height));
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);*/
+	if (motion_blur) {
+		//Motion Blur
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("motionblur");
+		shader->enable();
+		shader->setUniform("u_depth_texture", depth_texture, 1);
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_viewprojection_old", vp_matrix_last);
+		current_texture->toViewport(shader);
+		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
 
-	//Motion Blur
-	fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("motionblur");
-	shader->enable();
-	shader->setUniform("u_depth_texture", depth_texture, 1);
-	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_viewprojection_old", vp_matrix_last);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);
-
-	vp_matrix_last = camera->viewprojection_matrix;
+		vp_matrix_last = camera->viewprojection_matrix;
+	}
 
 	//Saturation + Vigneting
 	fbo = Texture::getGlobalFBO(postFX_textureA);
@@ -656,28 +682,33 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);
 
-	//FFXA
-	fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("ffxa");
-	shader->enable();
-	shader->setUniform("u_viewportSize", Vector2((float)width, (float)height));
-	shader->setUniform("u_iViewportSize", Vector2(1.0 / (float)width, 1.0 / (float)height));
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);
+	if (ffxa) {
+		//FFXA
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("ffxa");
+		shader->enable();
+		shader->setUniform("u_viewportSize", Vector2((float)width, (float)height));
+		shader->setUniform("u_iViewportSize", Vector2(1.0 / (float)width, 1.0 / (float)height));
+		current_texture->toViewport(shader);
+		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
+	}
 
-	//Bloom
-	fbo = Texture::getGlobalFBO(postFX_textureC);
-	fbo->bind();
-	shader = Shader::Get("contrast");
-	shader->enable();
-	shader->setUniform("u_intensity", contrast);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureC;
-
+	if (chr_lns) {
+		//Chromatic aberration and lens distortion
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("chrlns");
+		shader->enable();
+		shader->setUniform("resolution", Vector2((float)width, (float)height));
+		current_texture->toViewport(shader);
+		shader->disable();
+		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
+	}
 	//LUT
 	/*fbo = Texture::getGlobalFBO(postFX_textureA);
 	fbo->bind();
@@ -690,64 +721,78 @@ void GTR::Renderer::applyFX(Texture* color_texture, Texture* depth_texture, Came
 	current_texture = postFX_textureA;
 	std::swap(postFX_textureA, postFX_textureB);*/
 
-	//A partir de aqui me salen cuadrados random
-	fbo = Texture::getGlobalFBO(postFX_textureD);
-	fbo->bind();
-	shader = Shader::Get("threshold");
-	shader->enable();
-	shader->setUniform("u_threshold", threshold);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureD;
 
-	for (int i = 0; i < 12; i++) {
-		fbo = Texture::getGlobalFBO(postFX_textureA);
+	if (bloom) {
+		//Bloom
+		fbo = Texture::getGlobalFBO(postFX_textureC);
 		fbo->bind();
-		shader = Shader::Get("blur");
+		shader = Shader::Get("contrast");
 		shader->enable();
-		shader->setUniform("u_offset", vec2(pow(1.0f, i) / current_texture->width, 0.0) * debug_factor);
-		shader->setUniform("u_intensity", 1.0f);
+		shader->setUniform("u_intensity", contrast);
 		current_texture->toViewport(shader);
 		fbo->unbind();
+		current_texture = postFX_textureC;
 
-		fbo = Texture::getGlobalFBO(postFX_textureB);
+		fbo = Texture::getGlobalFBO(postFX_textureD);
 		fbo->bind();
-		shader = Shader::Get("blur");
+		shader = Shader::Get("threshold");
 		shader->enable();
-		shader->setUniform("u_offset", vec2(0.0, pow(1.0f,i) / current_texture->height) * debug_factor);
-		shader->setUniform("u_intensity", 1.0f);
-		postFX_textureA->toViewport(shader);
+		shader->setUniform("u_threshold", threshold);
+		current_texture->toViewport(shader);
 		fbo->unbind();
-		current_texture = postFX_textureB;
-	}
-	
-	fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("mix");
-	shader->enable();
-	shader->setUniform("u_intensity", debug_factor2);
-	shader->setUniform("u_textureB", postFX_textureC, 1);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);
+		current_texture = postFX_textureD;
 
-	//Depth of field
-	fbo = Texture::getGlobalFBO(postFX_textureA);
-	fbo->bind();
-	shader = Shader::Get("dof");
-	shader->enable();
-	shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
-	shader->setUniform("u_textureB", blurred_texture, 1);
-	shader->setUniform("u_inverse_viewprojection", inv_vp);
-	shader->setUniform("u_depth_texture", depth_texture, 2);
-	shader->setUniform("u_min_distance", min_distance_dof);
-	shader->setUniform("u_max_distance", max_distance_dof);
-	shader->setUniform("u_camera_position", camera->eye);
-	current_texture->toViewport(shader);
-	fbo->unbind();
-	current_texture = postFX_textureA;
-	std::swap(postFX_textureA, postFX_textureB);
+		for (int i = 0; i < 12; i++) {
+			fbo = Texture::getGlobalFBO(postFX_textureA);
+			fbo->bind();
+			shader = Shader::Get("blur");
+			shader->enable();
+			shader->setUniform("u_offset", vec2(pow(2.0f, i) / current_texture->width, 0.0) * debug_factor);
+			shader->setUniform("u_intensity", 1.0f);
+			current_texture->toViewport(shader);
+			fbo->unbind();
+
+			fbo = Texture::getGlobalFBO(postFX_textureB);
+			fbo->bind();
+			shader = Shader::Get("blur");
+			shader->enable();
+			shader->setUniform("u_offset", vec2(0.0, pow(2.0f, i) / current_texture->height) * debug_factor);
+			shader->setUniform("u_intensity", 1.0f);
+			postFX_textureA->toViewport(shader);
+			fbo->unbind();
+			current_texture = postFX_textureB;
+		}
+
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("mix");
+		shader->enable();
+		shader->setUniform("u_intensity", debug_factor2);
+		shader->setUniform("u_textureB", postFX_textureC, 1);
+		current_texture->toViewport(shader);
+		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
+	}
+
+	if (dof) {
+		//Depth of field
+		fbo = Texture::getGlobalFBO(postFX_textureA);
+		fbo->bind();
+		shader = Shader::Get("dof");
+		shader->enable();
+		shader->setUniform("u_iRes", Vector2(1.0 / (float)width, 1.0 / (float)height));
+		shader->setUniform("u_textureB", blurred_texture, 1);
+		shader->setUniform("u_inverse_viewprojection", inv_vp);
+		shader->setUniform("u_depth_texture", depth_texture, 2);
+		shader->setUniform("u_min_distance", min_distance_dof);
+		shader->setUniform("u_max_distance", max_distance_dof);
+		shader->setUniform("u_camera_position", camera->eye);
+		current_texture->toViewport(shader);
+		fbo->unbind();
+		current_texture = postFX_textureA;
+		std::swap(postFX_textureA, postFX_textureB);
+	}
 
 	//Tonemapper
 	shader = Shader::Get("tonemapper");
@@ -1001,6 +1046,11 @@ void GTR::Renderer::renderMeshWithMaterialandLight(const Matrix44 model, Mesh* m
 		shader->setUniform("u_texture_normal", normal_texture, 8);
 		shader->setUniform("u_have_normal_texture", 1); //Un prefab puede no tener un normal_map
 	} else shader->setUniform("u_have_normal_texture", 0);
+
+	Texture* reflection = skybox;
+	if (probe && !is_rendering_reflections)
+		reflection = probe->texture;
+	shader->setUniform("u_skybox_texture", reflection, 9);
 
 	//this is used to say which is the alpha threshold to what we should not paint a pixel on the screen (to cut polygons according to texture alpha)
 	shader->setUniform("u_alpha_cutoff", material->alpha_mode == GTR::eAlphaMode::MASK ? material->alpha_cutoff : 0);
@@ -1327,4 +1377,74 @@ Texture* GTR::CubemapFromHDRE(const char* filename)
 					(Uint8**)hdre->getFacesh(i), GL_RGBA16F, i);
 		}
 	return texture;
+}
+
+void GTR::Renderer::updateReflectionProbes(GTR::Scene* scene) {
+	for (int i = 0; i < scene->entities.size(); i++) {
+		BaseEntity* ent = scene->entities[i];
+		if (!ent->visible || ent->entity_type != eEntityType::REFLECTION_PROBE)
+			continue;
+		ReflectionProbeEntity* probe = (ReflectionProbeEntity*)ent;
+		if (!probe->texture) {
+			probe->texture = new Texture();
+			probe->texture->createCubemap(512, 512, NULL, GL_RGB, GL_UNSIGNED_INT, true);
+		}
+
+		captureReflectionProbe(scene, probe->texture, probe->model.getTranslation());
+		this->probe = probe;
+	}
+}
+
+void GTR::Renderer::renderReflectionProbes(GTR::Scene* scene, Camera* camera){
+	Mesh* mesh = Mesh::Get("data/meshes/sphere.obj", false, false);
+	Shader* shader = Shader::Get("reflection_probe");
+	shader->enable();
+	shader->setUniform("u_viewprojection", camera->viewprojection_matrix);
+	shader->setUniform("u_camera_position", camera->eye);
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+
+	for (int i = 0; i < scene->entities.size(); i++) {
+
+		BaseEntity* ent = scene->entities[i];
+		if (!ent->visible || ent->entity_type != eEntityType::REFLECTION_PROBE)
+			continue;
+
+		ReflectionProbeEntity* probe = (ReflectionProbeEntity*) ent;
+		if (!probe->texture)
+			continue;
+
+		Matrix44 model = ent->model;
+		model.scale(10, 10, 10);
+		shader->setUniform("u_model", model);
+		shader->setUniform("u_texture", probe->texture, 0);
+
+		mesh->render(GL_TRIANGLES);
+	}
+	shader->disable();
+}
+
+void GTR::Renderer::captureReflectionProbe(GTR::Scene* scene, Texture* tex, Vector3 pos) {
+	Camera camera;
+	for (int i = 0; i < 6; i++) {
+		reflection_probe_fbo->setTexture(tex, i);
+
+		reflection_probe_fbo->bind();
+		camera.setPerspective(90, 1, 0.1, 1000);
+		// render view
+		Vector3 eye = pos;
+		Vector3 center = pos + cubemapFaceNormals[i][2];
+		Vector3 up = cubemapFaceNormals[i][1];
+		camera.lookAt(eye, center, up);
+		camera.enable();
+		
+		is_rendering_reflections = true;
+		renderForward(scene, &camera);
+		is_rendering_reflections = false;
+		reflection_probe_fbo->unbind();
+
+	}
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	tex->generateMipmaps();
 }

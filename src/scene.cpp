@@ -238,3 +238,15 @@ void GTR::DecalEntity::configure(cJSON* json) {
 		texture = cJSON_GetObjectItem(json, "texture")->valuestring;
 	}
 }
+
+GTR::ReflectionProbeEntity::ReflectionProbeEntity() {
+	entity_type = eEntityType::REFLECTION_PROBE;
+	texture = NULL;
+}
+
+void GTR::ReflectionProbeEntity::renderInMenu() {
+
+}
+
+void GTR::ReflectionProbeEntity::configure(cJSON* json) {
+}

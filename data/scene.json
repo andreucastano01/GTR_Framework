@@ -85,13 +85,6 @@
 			"texture": "data/textures/mario_decal.png"
 		},
 		{
-			"name": "decal",
-			"type": "DECAL",
-			"position": [ -100, 0, 0 ],
-			"scale": [ 80, 30, 80 ],
-			"texture": "data/textures/frente.png"
-		},
-		{
 			"name": "spot",
 			"type": "LIGHT",
 			"position": [ 0, 36, -16 ],

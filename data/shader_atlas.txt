@@ -27,6 +27,8 @@ motionblur quad.vs motionblur.fs
 ffxa quad.vs ffxa.fs
 chrlns quad.vs chrlns.fs
 dof quad.vs dof.fs
+nonegativecolors quad.vs nonegativecolors.fs
+reflection_probe basic.vs reflection_probe.fs
 
 \encodenormalmap
 
@@ -445,6 +447,8 @@ void main()
 
 #version 330 core
 
+in vec2 v_uv;
+
 uniform vec2 u_iRes;
 
 uniform sampler2D u_texture;
@@ -472,6 +476,7 @@ uniform mat4 u_inverse_viewprojection;
 uniform float u_irr;
 
 uniform mat4 u_viewprojection;
+uniform samplerCube u_skybox_texture;
 
 out vec4 FragColor;
 
@@ -510,7 +515,7 @@ void main()
 		discard;
 
 	vec3 irradiance = vec3(1.0);
-	if(u_irr >= 1.0){
+	if(u_irr == 1.0){
 		//computing nearest probe index based on world position
 		vec3 irr_range = u_irr_end - u_irr_start;
 		vec3 irr_local_pos = clamp(world_position - u_irr_start + N * u_irr_normal_distance, vec3(0.0), irr_range);
@@ -644,6 +649,14 @@ void main()
 	vec3 light = direct * lightParams + ambient;
 	color.xyz *= light;
 	color.xyz *= irradiance;
+
+	V = normalize(world_position - u_camera_position);
+	vec3 R = reflect(V, N);
+
+	vec3 reflection = color.xyz * textureLod(u_skybox_texture, R, gb2_color.a * 5.0 ).xyz;
+
+	color.xyz = mix(color.xyz, reflection, gb1_color.a);
+
 	color.xyz += degamma(gb2_color.xyz);
 
 	//vec3 color = texture(u_gb0_texture, uv).xyz * irradiance;
@@ -841,6 +854,8 @@ uniform int u_have_occlusion_texture;
 uniform float u_roughness_factor;
 uniform float u_metallic_factor;
 
+uniform samplerCube u_skybox_texture;
+
 #include "encodenormalmap"
 #include "encodeshadowmap"
 #include "specular_formulas"
@@ -937,8 +952,14 @@ void main()
 
 	light += direct * lightParams;
 
+	V = normalize(v_world_position - u_camera_position);
+	vec3 R = reflect(V, N);
+
 	color.xyz *= light;
 	color.xyz += emissive_factor;
+	vec3 reflection = color.xyz * textureLod(u_skybox_texture, R, roughness * 5.0 ).xyz;
+
+	color.xyz = mix(color.xyz, reflection, metalness);
 
 	FragColor = color;
 }
@@ -1698,4 +1719,45 @@ void main() {
   }
 
   fragColor.rgb /= count;
+}
+
+\nonegativecolors.fs
+
+#version 330 core
+
+uniform sampler2D u_texture;
+
+in vec2 v_uv;
+
+out vec4 FragColor;
+
+//Used for blurring in DoF
+void main() {
+  	vec2 uv = v_uv;
+	vec4 color = texture(u_texture, uv);
+	if(color.x < 0.0) color.x = 0.0;
+	if(color.y < 0.0) color.y = 0.0;
+	if(color.z < 0.0) color.z = 0.0;
+	
+	FragColor = color;
+}
+
+\reflection_probe.fs
+
+#version 330 core
+
+in vec3 v_position;
+in vec3 v_world_position;
+in vec3 v_normal;
+uniform samplerCube u_texture;
+uniform vec3 u_camera_position;
+
+out vec4 FragColor;
+
+void main()
+{
+    vec3 V = v_world_position - u_camera_position;
+	vec3 N = normalize(v_normal);
+	vec3 R = reflect(V, N);
+	FragColor = textureLod(u_texture, R, 5.0);
 }

@@ -69,6 +69,10 @@ Application::Application(int window_width, int window_height, SDL_Window* window
 	if (!scene->load("data/scene.json"))
 		exit(1);
 
+	GTR::ReflectionProbeEntity* probe = new GTR::ReflectionProbeEntity();
+	probe->model.setTranslation(40, 40, 40);
+	scene->addEntity(probe);
+
 	camera->lookAt(scene->main_camera.eye, scene->main_camera.center, Vector3(0, 1, 0));
 	camera->fov = scene->main_camera.fov;
 
@@ -246,28 +250,45 @@ void Application::renderDebugGUI(void)
 	ImGui::Checkbox("Wireframe", &render_wireframe);
 	ImGui::ColorEdit3("BG color", scene->background_color.v);
 	ImGui::ColorEdit3("Ambient Light", scene->ambient_light.v);
-	ImGui::DragFloat("average_lum", &renderer->average_lum, 0.01);
-	ImGui::DragFloat("lum_white", &renderer->lum_white, 0.01);
-	ImGui::DragFloat("lum_scale", &renderer->lum_scale, 0.01);
 
-	ImGui::SliderFloat("Air_density", &scene->air_density, 0.000, 0.002);
-	ImGui::SliderFloat("Vigneting", &renderer->vigneting, 0.0, 2.0);
-	ImGui::SliderFloat("Saturation", &renderer->saturation, 0.0, 2.0);
-	ImGui::SliderFloat("Debug_factor", &renderer->debug_factor, 0.0, 5.0);
-	ImGui::SliderFloat("Debug_factor2", &renderer->debug_factor2, 0.0, 5.0);
-	ImGui::SliderFloat("Contrast", &renderer->contrast, 0.0, 2.0);
-	ImGui::SliderFloat("Threshold", &renderer->threshold, 0.0, 2.0);
-	ImGui::SliderFloat("Min Distance Depth of Field", &renderer->min_distance_dof, 0.0, 1000.0);
-	ImGui::SliderFloat("Max Distance Depth of Field", &renderer->max_distance_dof, 0.0, 1000.0);
+	ImGui::SliderFloat("Air density", &scene->air_density, 0.000, 0.002);
 
 	ImGui::Combo("Pipeline", (int*)&renderer->pipeline, "FORWARD\0DEFERRED", 2);
 	ImGui::Combo("Light rendering", (int*)&renderer->light_render, "SINGLEPASS\0MULTIPASS", 2);
-	ImGui::Combo("Irradiance", (int*)&renderer->irradiance_mode, "NORMAL\0INTERPOLATED", 2);
+
+	ImGui::Checkbox("Interpolated irradiance", &renderer->interpolated_irr);
 	ImGui::Checkbox("ssao+", &renderer->ssaoplus);
 	ImGui::Checkbox("Show Gbuffers", &renderer->show_gbuffers);
 	ImGui::Checkbox("Show ssao", &renderer->show_ssao);
 	ImGui::Checkbox("Show irradiance texture", &renderer->show_irr_texture);
 	
+	if (ImGui::TreeNode("Post processing")) {
+		ImGui::SliderFloat("Vigneting", &renderer->vigneting, 0.0, 2.0);
+		ImGui::SliderFloat("Saturation", &renderer->saturation, 0.0, 2.0);
+		ImGui::DragFloat("average lum", &renderer->average_lum, 0.01);
+		ImGui::DragFloat("lum white", &renderer->lum_white, 0.01);
+		ImGui::DragFloat("lum scale", &renderer->lum_scale, 0.01);
+		ImGui::Checkbox("Motion blur", &renderer->motion_blur);
+		ImGui::Checkbox("Chromatic + lens", &renderer->chr_lns);
+		ImGui::Checkbox("Antialiasing", &renderer->ffxa);
+		if (ImGui::TreeNode("Depth of field")) {
+			ImGui::Checkbox("Depth of field", &renderer->dof);
+			ImGui::SliderFloat("Min Distance Depth of Field", &renderer->min_distance_dof, 0.0, renderer->max_distance_dof);
+			ImGui::SliderFloat("Max Distance Depth of Field", &renderer->max_distance_dof, renderer->min_distance_dof, 1000.0);
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNode("Bloom")) {
+			ImGui::Checkbox("Bloom", &renderer->bloom);
+			ImGui::SliderFloat("Contrast", &renderer->contrast, 0.0, 2.0);
+			ImGui::SliderFloat("Threshold", &renderer->threshold, 0.0, 2.0);
+			ImGui::SliderFloat("Debug_factor", &renderer->debug_factor, 0.0, 5.0);
+			ImGui::SliderFloat("Debug_factor2", &renderer->debug_factor2, 0.0, 5.0);
+			ImGui::TreePop();
+		}
+		ImGui::TreePop();
+	}
+
 	//add info to the debug panel about the camera
 	if (ImGui::TreeNode(camera, "Camera")) {
 		camera->renderInMenu();
@@ -313,6 +334,7 @@ void Application::onKeyDown(SDL_KeyboardEvent event)
 		case SDLK_l: renderer->light_render = (renderer->light_render == GTR::Renderer::elightrender::MULTIPASS ? GTR::Renderer::elightrender::SINGLEPASS : GTR::Renderer::elightrender::MULTIPASS); break;
 		case SDLK_7: renderer->generateProbes(scene); break;
 		case SDLK_m: renderer->loadProbes(); break;
+		case SDLK_SPACE: renderer->updateReflectionProbes(scene); break;
 		case SDLK_i: renderer->show_irr_texture = !renderer->show_irr_texture; break;
 		case SDLK_F5: Shader::ReloadAll(); break;
 		case SDLK_F6:

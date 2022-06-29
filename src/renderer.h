@@ -53,18 +53,12 @@ namespace GTR {
 			DEFERRED
 		};
 
-		enum eirradiance {
-			NORMAL,
-			INTERPOLATED
-		};
-
 		//add here your functions
 		std::vector<RenderCall> render_calls;
 		std::vector<LightEntity*> lights;
 		std::vector<DecalEntity*> decals;
 		epipeline pipeline;
 		elightrender light_render;
-		eirradiance irradiance_mode;
 
 		void generateShadowMap(LightEntity* light);
 		void renderShadowMap(const Matrix44 model, Mesh* mesh, GTR::Material* material, Camera* camera);
@@ -76,11 +70,18 @@ namespace GTR {
 		bool show_gbuffers;
 		bool show_ssao;
 		bool ssaoplus;
+		bool interpolated_irr;
 		bool show_irr_texture;
+		bool motion_blur;
+		bool chr_lns;
+		bool dof;
+		bool ffxa;
+		bool bloom;
+		bool is_rendering_reflections;
+		
 		float average_lum;
 		float lum_white;
 		float lum_scale;
-
 		float vigneting;
 		float saturation;
 		float contrast;
@@ -98,6 +99,8 @@ namespace GTR {
 		FBO* ssao_blur;
 		FBO* irr_fbo;
 		FBO* volumetric_fbo;
+		FBO* reflection_fbo;
+		FBO* reflection_probe_fbo;
 		Texture* probes_texture;
 		Texture* postFX_textureA;
 		Texture* postFX_textureB;
@@ -108,6 +111,7 @@ namespace GTR {
 
 		std::vector<Vector3> ssao_random_points;
 		std::vector<Vector3> ssaoplus_random_points;
+		ReflectionProbeEntity* probe;
 
 		std::vector<sProbe> probes;
 		Vector3 irr_start_pos;
@@ -123,6 +127,9 @@ namespace GTR {
 
 		Texture* skybox;
 		void generateSkybox(Camera* camera);
+		void updateReflectionProbes(GTR::Scene* scene);
+		void renderReflectionProbes(GTR::Scene* scene, Camera* camera);
+		void captureReflectionProbe(GTR::Scene* scene, Texture* tex, Vector3 pos);
 
 		Renderer();
 
@@ -132,6 +139,7 @@ namespace GTR {
 
 		//renders several elements of the scene
 		void renderScene(GTR::Scene* scene, Camera* camera);
+		void renderSceneForward(GTR::Scene* scene, Camera* camera);
 	
 		//to render a whole prefab (with all its nodes)
 		void renderPrefab(const Matrix44& model, GTR::Prefab* prefab, Camera* camera);
